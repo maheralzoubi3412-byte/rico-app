@@ -32,15 +32,42 @@ class PlacesService {
   // (نتيجة واحدة ليست خيارات كافية للمستخدم، حتى لو لم تكن القائمة فارغة)
   static const int _minDesiredResults = 3;
 
-  // مستويات نطاق تصاعدية نجربها إذا لم نصل للحد الأدنى من النتائج
-  // (بيانات OSM قد تكون متفرقة في بعض المناطق، فنطاق أوسع يكشف نتائج فعلية أكثر)
-  static const List<int> _widerRadiiMeters = [8000, 15000];
+  // نطاق أوسع نجربه مرة واحدة فقط إذا لم نصل للحد الأدنى من النتائج
+  // (بيانات OSM قد تكون متفرقة في بعض المناطق) — خطوة واحدة فقط حتى لا يتضاعف
+  // زمن الانتظار عبر عدة محاولات شبكة متتالية
+  static const List<int> _widerRadiiMeters = [8000];
+
+  // أحرف regex الخاصة التي يجب تهريبها قبل تضمين نص حر (اسم علامة تجارية) في
+  // استعلام Overpass QL — نتعامل معه كنص حرفي وليس كـ regex يتحكم به المستخدم
+  static const String _regexMetachars = r'\.^$|?*+()[]{}';
+
+  /// يهرّب/يرفض نص العلامة التجارية قبل تضمينه في استعلام Overpass QL.
+  /// يرجع null إذا كان النص فارغاً أو طويلاً جداً أو يحتوي أحرف تحكّم قد
+  /// تكسر بنية الاستعلام.
+  static String? _sanitizeBrandHint(String hint) {
+    final trimmed = hint.trim();
+    if (trimmed.isEmpty || trimmed.length > 60) return null;
+    if (trimmed.codeUnits.any((c) => c < 0x20)) return null;
+
+    final buffer = StringBuffer();
+    for (final rune in trimmed.runes) {
+      final ch = String.fromCharCode(rune);
+      if (ch == '"' || _regexMetachars.contains(ch)) {
+        buffer.write('\\$ch');
+      } else {
+        buffer.write(ch);
+      }
+    }
+    return buffer.toString();
+  }
 
   Future<List<PlaceResult>> search({
     required double userLat,
     required double userLng,
     required List<OsmTag> tags,
     bool cheapest = false,
+    bool openNow = false,
+    String? brandHint,
     int radiusMeters = 3000,
   }) async {
     var results = await _searchOnce(
@@ -48,6 +75,8 @@ class PlacesService {
       userLng: userLng,
       tags: tags,
       radiusMeters: radiusMeters,
+      openNow: openNow,
+      brandHint: brandHint,
     );
 
     for (final widerRadius in _widerRadiiMeters) {
@@ -59,6 +88,8 @@ class PlacesService {
         userLng: userLng,
         tags: tags,
         radiusMeters: widerRadius,
+        openNow: openNow,
+        brandHint: brandHint,
       );
     }
 
@@ -70,11 +101,18 @@ class PlacesService {
     required double userLng,
     required List<OsmTag> tags,
     required int radiusMeters,
+    bool openNow = false,
+    String? brandHint,
   }) async {
+    final nameFilter =
+        brandHint != null && _sanitizeBrandHint(brandHint) != null
+            ? '["name"~"${_sanitizeBrandHint(brandHint)}",i]'
+            : '';
+
     final filters = tags
         .map((t) => '''
-  node["${t.key}"="${t.value}"](around:$radiusMeters,$userLat,$userLng);
-  way["${t.key}"="${t.value}"](around:$radiusMeters,$userLat,$userLng);''')
+  node["${t.key}"="${t.value}"]$nameFilter(around:$radiusMeters,$userLat,$userLng);
+  way["${t.key}"="${t.value}"]$nameFilter(around:$radiusMeters,$userLat,$userLng);''')
         .join('\n');
 
     final query = '''
@@ -86,11 +124,14 @@ out center tags;
 ''';
 
     Exception? lastError;
+    var anyConnectionFailure = false;
 
     for (final endpoint in _endpoints) {
       http.Response? response;
 
-      // إعادة محاولة واحدة على نفس المرآة إذا كان الخطأ ازدحاماً مؤقتاً
+      // إعادة محاولة واحدة على نفس المرآة: فشل الاتصال قد يكون بسبب استيقاظ
+      // شبكة الجهاز بعد فترة خمول، لا مشكلة فعلية بالخادم — لكن محاولات كثيرة
+      // بمهلة طويلة على مرآة معطّلة فعلاً تُبطّئ كل الطلب بلا فائدة
       for (var attempt = 0; attempt < 2; attempt++) {
         try {
           response = await http
@@ -98,7 +139,7 @@ out center tags;
                 Uri.parse(endpoint),
                 body: {'data': query},
               )
-              .timeout(const Duration(seconds: 15));
+              .timeout(const Duration(seconds: 10));
 
           if (response.statusCode == 200 ||
               !_retryableStatusCodes.contains(response.statusCode)) {
@@ -114,7 +155,8 @@ out center tags;
       }
 
       if (response == null) {
-        lastError = PlacesException('تعذر الوصول للخادم، جاري تجربة خادم بديل...');
+        anyConnectionFailure = true;
+        lastError = PlacesException('تعذر الوصول لخدمة الأماكن حالياً، جاري تجربة خادم بديل...');
         continue;
       }
 
@@ -143,14 +185,31 @@ out center tags;
 
         // نرتب دوماً حسب الأقرب مسافة (مصدر البيانات المجاني لا يوفر بيانات
         // سعر/تقييم موثوقة بما يكفي للترتيب حسب "الأرخص" بدقة)
-        results.sort((a, b) =>
-            (a.distanceMeters ?? 0).compareTo(b.distanceMeters ?? 0));
+        if (openNow) {
+          // لا نستبعد المغلق/غير المؤكد نهائياً (بيانات opening_hours متفرقة)،
+          // فقط نقدّم المفتوح المؤكد أولاً ثم نرتب كل مجموعة حسب الأقرب
+          results.sort((a, b) {
+            final aRank = a.isOpenNow == true ? 0 : (a.isOpenNow == null ? 1 : 2);
+            final bRank = b.isOpenNow == true ? 0 : (b.isOpenNow == null ? 1 : 2);
+            if (aRank != bRank) return aRank.compareTo(bRank);
+            return (a.distanceMeters ?? 0).compareTo(b.distanceMeters ?? 0);
+          });
+        } else {
+          results.sort((a, b) =>
+              (a.distanceMeters ?? 0).compareTo(b.distanceMeters ?? 0));
+        }
 
         return results.take(8).toList();
       } catch (e) {
-        lastError = PlacesException('تعذر الوصول للخادم، جاري تجربة خادم بديل...');
+        lastError = PlacesException('تعذر الوصول لخدمة الأماكن حالياً، جاري تجربة خادم بديل...');
         continue;
       }
+    }
+
+    // إذا فشل الاتصال بكل المرايا (لا رد أصلاً)، الاحتمال الأكبر مشكلة شبكة
+    // مؤقتة بالجهاز (خصوصاً بعد فترة خمول)، وليس تعطّل كل الخوادم الأربعة فعلاً
+    if (anyConnectionFailure) {
+      throw PlacesException('تعذر الاتصال بالإنترنت، تحقق من اتصالك وحاول مرة أخرى.');
     }
 
     throw lastError ?? PlacesException('تعذر الاتصال بخدمة الأماكن حالياً.');

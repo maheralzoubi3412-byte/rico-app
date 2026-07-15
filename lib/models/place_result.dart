@@ -1,3 +1,5 @@
+import '../utils/opening_hours.dart';
+
 class PlaceResult {
   final String osmId;
   final String name;
@@ -66,6 +68,9 @@ class PlaceResult {
     );
   }
 
+  /// null = لا يمكن التأكد من حالة الفتح حالياً (صياغة opening_hours غير مدعومة)
+  bool? get isOpenNow => OpeningHours.isOpenNow(openingHours, DateTime.now());
+
   String get distanceLabel {
     if (distanceMeters == null) return '';
     if (distanceMeters! < 1000) {
@@ -77,4 +82,31 @@ class PlaceResult {
   /// رابط خرائط جوجل بالاعتماد على الإحداثيات فقط (بدون الحاجة لـ place_id مدفوع)
   String get googleMapsUrl =>
       'https://www.google.com/maps/search/?api=1&query=$lat,$lng';
+
+  /// رابط اتجاهات فعلية من موقع المستخدم الحالي إلى المكان (لا يحتاج نقطة بداية،
+  /// تطبيق خرائط جوجل يستخدم الموقع الحالي تلقائياً)
+  String get directionsUrl =>
+      'https://www.google.com/maps/dir/?api=1&destination=$lat,$lng';
+
+  Map<String, dynamic> toJson() => {
+        'osmId': osmId,
+        'name': name,
+        'address': address,
+        'lat': lat,
+        'lng': lng,
+        'phone': phone,
+        'openingHours': openingHours,
+      };
+
+  factory PlaceResult.fromJson(Map<String, dynamic> json) {
+    return PlaceResult(
+      osmId: json['osmId'] as String,
+      name: json['name'] as String,
+      address: json['address'] as String,
+      lat: (json['lat'] as num).toDouble(),
+      lng: (json['lng'] as num).toDouble(),
+      phone: json['phone'] as String?,
+      openingHours: json['openingHours'] as String?,
+    );
+  }
 }

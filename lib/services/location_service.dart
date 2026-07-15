@@ -1,8 +1,13 @@
 import 'package:geolocator/geolocator.dart';
 
+/// نوع مشكلة الموقع، يستخدم لتحديد ما إذا كان يجدر عرض زر "فتح الإعدادات"
+/// وأي إعدادات يفتح (إعدادات الموقع نفسه أو إعدادات إذن التطبيق).
+enum LocationErrorType { serviceDisabled, permissionDenied, permissionDeniedForever, unknown }
+
 class LocationException implements Exception {
   final String message;
-  LocationException(this.message);
+  final LocationErrorType type;
+  LocationException(this.message, {this.type = LocationErrorType.unknown});
   @override
   String toString() => message;
 }
@@ -13,20 +18,27 @@ class LocationService {
     final serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
       throw LocationException(
-          'خدمة الموقع غير مفعّلة على جهازك. فعّلها من الإعدادات ثم حاول مجدداً.');
+        'خدمة الموقع غير مفعّلة على جهازك. فعّلها من الإعدادات ثم حاول مجدداً.',
+        type: LocationErrorType.serviceDisabled,
+      );
     }
 
     LocationPermission permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
       if (permission == LocationPermission.denied) {
-        throw LocationException('أحتاج إذن الوصول لموقعك لأقترح عليك أقرب الأماكن 📍');
+        throw LocationException(
+          'أحتاج إذن الوصول لموقعك لأقترح عليك أقرب الأماكن 📍',
+          type: LocationErrorType.permissionDenied,
+        );
       }
     }
 
     if (permission == LocationPermission.deniedForever) {
       throw LocationException(
-          'تم رفض إذن الموقع بشكل دائم. فعّله من إعدادات التطبيق حتى أقدر أساعدك.');
+        'تم رفض إذن الموقع بشكل دائم. فعّله من إعدادات التطبيق حتى أقدر أساعدك.',
+        type: LocationErrorType.permissionDeniedForever,
+      );
     }
 
     return await Geolocator.getCurrentPosition(

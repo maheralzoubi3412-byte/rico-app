@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'screens/chat_screen.dart';
+import 'theme/app_theme.dart';
 
 void main() {
   runApp(const RicoApp());
@@ -13,11 +14,7 @@ class RicoApp extends StatelessWidget {
     return MaterialApp(
       title: 'ريكو',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        primaryColor: const Color(0xFF0F9D58),
-        fontFamily: 'Tajawal',
-        scaffoldBackgroundColor: const Color(0xFFF7F8FA),
-      ),
+      theme: AppTheme.light(),
       home: const ChatScreen(),
     );
   }

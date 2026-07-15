@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/chat_message.dart';
+import '../theme/app_theme.dart';
 import 'place_card.dart';
 
 class MessageBubble extends StatelessWidget {
@@ -24,21 +25,29 @@ class MessageBubble extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               decoration: BoxDecoration(
-                color: isUser ? const Color(0xFFEDEDED) : const Color(0xFF0F9D58),
-                borderRadius: BorderRadius.circular(18),
+                color: isUser ? AppColors.userBubble : AppColors.primary,
+                borderRadius: BorderRadius.circular(AppRadii.bubble),
               ),
               child: message.isLoading
-                  ? const SizedBox(
-                      width: 40,
-                      height: 18,
-                      child: Center(
-                        child: SizedBox(
+                  ? Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const SizedBox(
                           width: 16,
                           height: 16,
                           child: CircularProgressIndicator(
                               strokeWidth: 2, color: Colors.white),
                         ),
-                      ),
+                        if (message.text.isNotEmpty) ...[
+                          const SizedBox(width: 10),
+                          Flexible(
+                            child: Text(
+                              message.text,
+                              style: const TextStyle(color: Colors.white, fontSize: 15),
+                            ),
+                          ),
+                        ],
+                      ],
                     )
                   : Text(
                       message.text,
@@ -48,6 +57,19 @@ class MessageBubble extends StatelessWidget {
                       ),
                     ),
             ),
+            if (message.actionLabel != null && message.onAction != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: OutlinedButton(
+                  onPressed: message.onAction,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.primary,
+                    side: const BorderSide(color: AppColors.primary),
+                    minimumSize: const Size(0, 40),
+                  ),
+                  child: Text(message.actionLabel!),
+                ),
+              ),
             if (message.places != null && message.places!.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(top: 8),
