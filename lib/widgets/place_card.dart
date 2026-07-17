@@ -118,6 +118,10 @@ class _PlaceCardState extends State<PlaceCard> {
                   children: [
                     if (place.distanceMeters != null)
                       _chip(Icons.location_on, place.distanceLabel),
+                    if (place.ratingLabel != null)
+                      _chip(Icons.star, place.ratingLabel!, color: Colors.amber[700]),
+                    if (place.priceLevelLabel != null)
+                      _chip(Icons.payments, place.priceLevelLabel!),
                     if (place.isOpenNow != null)
                       _chip(
                         Icons.circle,

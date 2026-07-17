@@ -61,15 +61,34 @@ class PlacesService {
     return buffer.toString();
   }
 
+  // rico-api يوفر ترتيباً حقيقياً (سعر/تقييم فعليين) لكن تغطيته محدودة حالياً
+  // بالمناطق التي زُوّدت ببيانات جوجل — Overpass يبقى المصدر الاحتياطي دوماً
+  // لأنه يغطي كل السعودية. لا معنى لطلب أرخص/أعلى تقييماً بعلامة تجارية محددة
+  // (brandHint) لأن /search لا يفلتر بالاسم بعد، فنتجاهله في هذه الحالة.
+  static const String _ricoApiBaseUrl = 'https://rico-api.rico-app-maher.workers.dev';
+
   Future<List<PlaceResult>> search({
     required double userLat,
     required double userLng,
     required List<OsmTag> tags,
     bool cheapest = false,
     bool openNow = false,
+    bool bestRated = false,
     String? brandHint,
+    String? categorySlug,
     int radiusMeters = 3000,
   }) async {
+    if ((cheapest || bestRated) && categorySlug != null && brandHint == null) {
+      final ranked = await _searchRicoApi(
+        userLat: userLat,
+        userLng: userLng,
+        categorySlug: categorySlug,
+        rank: bestRated ? 'best_rated' : 'cheapest',
+        radiusMeters: radiusMeters,
+      );
+      if (ranked != null) return ranked;
+    }
+
     var results = await _searchOnce(
       userLat: userLat,
       userLng: userLng,
@@ -94,6 +113,45 @@ class PlacesService {
     }
 
     return results;
+  }
+
+  /// يحاول جلب ترتيب حقيقي (أرخص/أعلى تقييماً) من rico-api. يرجع null إذا
+  /// فشل الاتصال، أو لم تتوفر بيانات كافية للترتيب المطلوب فعلياً، أو لم توجد
+  /// نتائج — في كل هذه الحالات يسقط المستدعي إلى Overpass تلقائياً.
+  Future<List<PlaceResult>?> _searchRicoApi({
+    required double userLat,
+    required double userLng,
+    required String categorySlug,
+    required String rank,
+    required int radiusMeters,
+  }) async {
+    try {
+      final uri = Uri.parse('$_ricoApiBaseUrl/search').replace(queryParameters: {
+        'lat': '$userLat',
+        'lng': '$userLng',
+        'radius': '$radiusMeters',
+        'categorySlug': categorySlug,
+        'rank': rank,
+      });
+
+      final response = await http.get(uri).timeout(const Duration(seconds: 6));
+      if (response.statusCode != 200) return null;
+
+      final data = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+      final dataAvailable = rank == 'cheapest'
+          ? data['priceDataAvailable'] == true
+          : data['ratingDataAvailable'] == true;
+      if (!dataAvailable) return null;
+
+      final places = (data['places'] as List?) ?? [];
+      if (places.isEmpty) return null;
+
+      return places
+          .map((p) => PlaceResult.fromRicoApiJson(p as Map<String, dynamic>))
+          .toList();
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<List<PlaceResult>> _searchOnce({

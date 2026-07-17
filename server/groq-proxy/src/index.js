@@ -13,28 +13,38 @@ const CATEGORIES = [
 ];
 
 const OTHER_TAG_KEYS = ['amenity', 'shop', 'leisure', 'tourism', 'office', 'craft'];
+const RANKS = ['nearest', 'cheapest', 'open_now', 'best_rated'];
+const MAX_INTENTS = 3;
 
-const SYSTEM_PROMPT = `أنت مصنّف نوايا لتطبيق "ريكو" الذي يساعد المستخدمين في السعودية على إيجاد أقرب مكان.
-مهمتك تصنيف رسالة المستخدم الحالية إلى واحدة من هذه الفئات، وليس الدردشة معه:
-${CATEGORIES.join(', ')}, other, off_topic
+const SYSTEM_PROMPT = `أنت مصنّف نوايا لتطبيق "ريكو" الذي يساعد المستخدمين في السعودية على إيجاد أقرب مكان والعروض المتاحة، وليس للدردشة معه.
 
-قد تُرسل معها رسائل سابقة من نفس المحادثة (history) لتوفير السياق.
+قد تحتوي رسالة واحدة أكثر من طلب مستقل مفصولة بـ"و" أو "أو" أو "،" (مثال: "أقرب مطعم أو أرخص كافيه، وايش العروض المتوفرة؟"). هذا مهم جداً وهو مصدر أخطاء متكرر: يجب أن تحلّل *كل* طلب مستقل ذُكر في الرسالة، لا أن تختار طلباً واحداً فقط وتتجاهل الباقي — حتى لو كانت الطلبات مفصولة بـ"أو" (أو هنا تعني "أعطني كل هذه الأشياء"، وليست اختياراً بين بديلين تختار منه واحداً). قبل أن تجيب، عُدّ عدد الطلبات المستقلة في الرسالة، وتأكد أن طول القائمة intents يساوي هذا العدد بالضبط (بحد أقصى ${MAX_INTENTS}). إذا كانت الرسالة تطلب شيئاً واحداً فقط، أعد عنصراً واحداً.
 
-القواعد:
-- إذا كانت الرسالة الحالية استكمالاً أو تعديلاً لطلب سابق (مثل "أبعد شوي"، "بس المفتوح الحين"، "نفس الشي بس أرخص")، استخدم history لتحديد الفئة الصحيحة بدلاً من افتراض off_topic.
-- استخدم "off_topic" فقط لرسالة لا تطلب إيجاد مكان قريب ولا هي استكمال لطلب سابق (تحية، سؤال عام، شكر، دردشة عابرة...).
-- إذا كان طلب المستخدم يخص مكاناً حقيقياً لكنه لا يطابق أياً من الفئات الثابتة أعلاه (مثل "مغسلة سيارات" أو "محل حلاقة")، استخدم الفئة "other" مع:
-  - customTag: تخمين لوسم OpenStreetMap مناسب، بالشكل {"key": "...", "value": "..."} حيث key يجب أن يكون أحد: ${OTHER_TAG_KEYS.join(', ')}، وvalue بحروف إنجليزية صغيرة وأرقام و underscore فقط (مثال: {"key":"shop","value":"car_wash"}).
-  - label: اسم عربي قصير للفئة (مثال: "مغسلة سيارات").
-- اجعل wantsCheapest=true فقط إذا طلب المستخدم صريحاً "الأرخص" أو "الأوفر" أو ذكر عرضاً.
-- اجعل wantsOpenNow=true فقط إذا طلب المستخدم صراحة مكاناً "مفتوح الحين/الآن" أو "فاتح الحين".
-- اجعل brandHint اسم العلامة التجارية أو المكان المحدد فقط إذا ذكره المستخدم صراحة (مثال: "ستاربكس")، وإلا اجعله null.
-- اكتب reply فقط إذا كانت الفئة off_topic: جملة عربية قصيرة وودودة واحدة تذكّر
-  المستخدم بلطف أن ريكو مخصص لإيجاد أقرب مطعم أو كافيه أو صيدلية وغيرها، مع
-  مثال مثل "أقرب مطعم". لغير ذلك اجعل reply=null دائماً (لا حاجة له).
+مثال كامل — الرسالة: "وش أقرب مطعم أو أرخص كافيه، وايش العروض المتوفرة؟" تحتوي ٣ طلبات مستقلة (مطعم، كافيه، عروض)، لذا الناتج الصحيح:
+{"offTopic": false, "reply": null, "intents": [
+  {"kind": "place", "category": "restaurant", "rank": "nearest", "brandHint": null, "customTag": null, "label": null},
+  {"kind": "place", "category": "cafe", "rank": "cheapest", "brandHint": null, "customTag": null, "label": null},
+  {"kind": "deals", "category": null, "rank": "nearest", "brandHint": null, "customTag": null, "label": "العروض"}
+]}
+ناتج خاطئ لنفس الرسالة (يجب تفاديه): إرجاع عنصر "deals" وحده متجاهلاً طلبي المطعم والكافيه، أو إرجاع عنصر واحد فقط بشكل عام لرسالة تحتوي عدة طلبات.
+
+قد تُرسل معها رسائل سابقة من نفس المحادثة (history) لتوفير السياق. إذا كانت الرسالة الحالية استكمالاً أو تعديلاً لطلب سابق (مثل "أبعد شوي"، "بس المفتوح الحين"، "نفس الشي بس أرخص")، استخدم history لتحديد النية الصحيحة بدلاً من افتراض offTopic.
+
+كل عنصر في intents يمثّل أحد نوعين (kind):
+- "place": طلب إيجاد مكان.
+  - category يجب أن تكون إحدى هذه الفئات بالضبط: ${CATEGORIES.join(', ')}, other.
+  - إذا كان الطلب يخص مكاناً حقيقياً لا يطابق أياً من الفئات الثابتة (مثل "مغسلة سيارات" أو "محل حلاقة")، استخدم category="other" مع:
+    - customTag: تخمين لوسم OpenStreetMap مناسب، بالشكل {"key": "...", "value": "..."} حيث key يجب أن يكون أحد: ${OTHER_TAG_KEYS.join(', ')}، وvalue بحروف إنجليزية صغيرة وأرقام وunderscore فقط (مثال: {"key":"shop","value":"car_wash"}).
+    - label: اسم عربي قصير للفئة (مثال: "مغسلة سيارات").
+  - لغير "other" اجعل customTag=null وlabel=null.
+  - rank يجب أن تكون واحدة من: "nearest" (افتراضي، أقرب مكان)، "cheapest" (طلب صريح "الأرخص"/"الأوفر")، "open_now" (طلب صريح مكان "مفتوح الحين/الآن"/"فاتح الحين")، "best_rated" (طلب صريح "الأفضل تقييماً"/"الأعلى تقييم"). إذا لم يُذكر شيء صريح، استخدم "nearest".
+  - brandHint اسم العلامة التجارية أو المكان المحدد فقط إذا ذكره المستخدم صراحة (مثال: "ستاربكس")، وإلا اجعله null.
+- "deals": طلب عروض أو خصومات (مثال: "وش العروض المتوفرة؟"، "فيه خصومات؟"). category=null, rank="nearest", customTag=null, brandHint=null, label="العروض" (أو اسم عربي قصير مشابه إذا ذكر المستخدم نوعاً محدداً من العروض).
+
+استخدم offTopic=true فقط لرسالة لا تطلب مكاناً ولا عروضاً ولا هي استكمال لطلب سابق (تحية، سؤال عام، شكر، دردشة عابرة...)، واجعل intents مصفوفة فارغة []. اكتب reply في هذه الحالة فقط: جملة عربية قصيرة وودودة واحدة تذكّر المستخدم بلطف أن ريكو مخصص لإيجاد أقرب مطعم أو كافيه أو صيدلية وغيرها والعروض المتاحة، مع مثال مثل "أقرب مطعم". لغير ذلك اجعل reply=null دائماً (لا حاجة له).
 
 أعد الناتج بصيغة JSON فقط بدون أي نص إضافي وبالشكل التالي بالضبط:
-{"category": "...", "wantsCheapest": true|false, "wantsOpenNow": true|false, "brandHint": "..."|null, "customTag": {"key": "...", "value": "..."}|null, "label": "..."|null, "reply": "..."|null}`;
+{"offTopic": true|false, "reply": "..."|null, "intents": [{"kind": "place"|"deals", "category": "..."|null, "rank": "nearest"|"cheapest"|"open_now"|"best_rated", "brandHint": "..."|null, "customTag": {"key": "...", "value": "..."}|null, "label": "..."|null}]}`;
 
 function isValidHistory(history) {
   if (history === undefined) return true;
@@ -49,15 +59,85 @@ function isValidHistory(history) {
   );
 }
 
+// Called directly from the Flutter web build's browser context, which
+// enforces CORS — needed for the app to reach this Worker at all when
+// running as a web app (native mobile/desktop builds aren't affected).
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type',
+};
+
 function jsonResponse(obj, status) {
   return new Response(JSON.stringify(obj), {
     status,
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
   });
+}
+
+// يتحقق من عنصر نية واحد ويطبّعه، أو يرجع null إذا كان غير صالح تماماً
+// (العنصر غير الصالح يُستبعد بدل رفض الرسالة كلها — انظر موضع الاستدعاء).
+function validateIntent(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+
+  if (raw.kind === 'deals') {
+    const rawLabel = typeof raw.label === 'string' ? raw.label.trim() : '';
+    return {
+      kind: 'deals',
+      category: null,
+      rank: 'nearest',
+      brandHint: null,
+      customTag: null,
+      label: rawLabel && rawLabel.length <= 40 ? rawLabel : 'العروض',
+    };
+  }
+
+  if (raw.kind !== 'place') return null;
+
+  const category = raw.category;
+  if (category !== 'other' && !CATEGORIES.includes(category)) return null;
+
+  const rank = RANKS.includes(raw.rank) ? raw.rank : 'nearest';
+
+  let customTag = null;
+  let label = null;
+  if (category === 'other') {
+    const tag = raw.customTag;
+    const key = tag && typeof tag.key === 'string' ? tag.key : '';
+    const value = tag && typeof tag.value === 'string' ? tag.value : '';
+    const rawLabel = typeof raw.label === 'string' ? raw.label.trim() : '';
+
+    if (
+      !OTHER_TAG_KEYS.includes(key) ||
+      !/^[a-z0-9_]+$/.test(value) ||
+      !rawLabel ||
+      rawLabel.length > 40
+    ) {
+      return null;
+    }
+
+    customTag = { key, value };
+    label = rawLabel;
+  }
+
+  const brandHintRaw = typeof raw.brandHint === 'string' ? raw.brandHint.trim() : '';
+
+  return {
+    kind: 'place',
+    category,
+    rank,
+    brandHint: brandHintRaw && brandHintRaw.length <= 60 ? brandHintRaw : null,
+    customTag,
+    label,
+  };
 }
 
 export default {
   async fetch(request, env) {
+    if (request.method === 'OPTIONS') {
+      return new Response(null, { status: 204, headers: CORS_HEADERS });
+    }
+
     if (request.method !== 'POST') {
       return jsonResponse({ error: 'method_not_allowed' }, 405);
     }
@@ -100,7 +180,7 @@ export default {
           ],
           response_format: { type: 'json_object' },
           temperature: 0,
-          max_tokens: 200,
+          max_tokens: 350,
         }),
       });
     } catch {
@@ -123,45 +203,20 @@ export default {
       return jsonResponse({ error: 'parse_error' }, 502);
     }
 
-    const category = parsed.category;
-    if (category !== 'off_topic' && category !== 'other' && !CATEGORIES.includes(category)) {
-      return jsonResponse({ error: 'invalid_category' }, 502);
+    if (parsed.offTopic === true) {
+      return jsonResponse(
+        { offTopic: true, reply: typeof parsed.reply === 'string' ? parsed.reply : null, intents: [] },
+        200,
+      );
     }
 
-    let customTag = null;
-    let label = null;
-    if (category === 'other') {
-      const tag = parsed.customTag;
-      const key = tag && typeof tag.key === 'string' ? tag.key : '';
-      const value = tag && typeof tag.value === 'string' ? tag.value : '';
-      const rawLabel = typeof parsed.label === 'string' ? parsed.label.trim() : '';
+    const rawIntents = Array.isArray(parsed.intents) ? parsed.intents.slice(0, MAX_INTENTS) : [];
+    const intents = rawIntents.map(validateIntent).filter(Boolean);
 
-      if (
-        !OTHER_TAG_KEYS.includes(key) ||
-        !/^[a-z0-9_]+$/.test(value) ||
-        !rawLabel ||
-        rawLabel.length > 40
-      ) {
-        return jsonResponse({ error: 'invalid_category' }, 502);
-      }
-
-      customTag = { key, value };
-      label = rawLabel;
+    if (intents.length === 0) {
+      return jsonResponse({ error: 'invalid_intents' }, 502);
     }
 
-    const brandHintRaw = typeof parsed.brandHint === 'string' ? parsed.brandHint.trim() : '';
-
-    return jsonResponse(
-      {
-        category,
-        wantsCheapest: parsed.wantsCheapest === true,
-        wantsOpenNow: parsed.wantsOpenNow === true,
-        brandHint: brandHintRaw && brandHintRaw.length <= 60 ? brandHintRaw : null,
-        customTag,
-        label,
-        reply: typeof parsed.reply === 'string' ? parsed.reply : null,
-      },
-      200,
-    );
+    return jsonResponse({ offTopic: false, reply: null, intents }, 200);
   },
 };

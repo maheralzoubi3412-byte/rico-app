@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/chat_message.dart';
 import '../theme/app_theme.dart';
+import 'deal_card.dart';
 import 'place_card.dart';
 
 class MessageBubble extends StatelessWidget {
@@ -77,6 +78,15 @@ class MessageBubble extends StatelessWidget {
                   children: [
                     for (var i = 0; i < message.places!.length; i++)
                       PlaceCard(place: message.places![i], rank: i + 1),
+                  ],
+                ),
+              ),
+            if (message.deals != null && message.deals!.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Column(
+                  children: [
+                    for (final deal in message.deals!) DealCard(deal: deal),
                   ],
                 ),
               ),

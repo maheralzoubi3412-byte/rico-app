@@ -2,49 +2,76 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'intent_service.dart';
 
-/// نتيجة تصنيف الرسالة عبر الخادم الوسيط (Cloudflare Worker + Groq).
-class LlmClassification {
-  final bool isOffTopic;
-  final String? reply;
-  final String? categorySlug;
-  final bool wantsCheapest;
-  final bool wantsOpenNow;
+/// نية واحدة مفكوكة من رد المصنّف (LLM)، قد تمثّل بحثاً عن مكان أو طلب عروض.
+/// رسالة واحدة قد تحتوي عدة نوايا (انظر [LlmClassification.intents]).
+class ResolvedIntent {
+  final String kind; // 'place' | 'deals'
+  final String? category;
+  final String rank; // 'nearest' | 'cheapest' | 'open_now' | 'best_rated'
   final String? brandHint;
   final String? customTagKey;
   final String? customTagValue;
-  final String? customLabel;
+  final String? label;
+
+  ResolvedIntent({
+    required this.kind,
+    this.category,
+    this.rank = 'nearest',
+    this.brandHint,
+    this.customTagKey,
+    this.customTagValue,
+    this.label,
+  });
+
+  QueryIntent? toQueryIntent() {
+    if (kind == 'deals') {
+      return QueryIntent(kind: IntentKind.deals, label: label ?? 'العروض');
+    }
+
+    final rankMode = _rankFromString(rank);
+
+    if (category == 'other') {
+      if (customTagKey == null || customTagValue == null || label == null) return null;
+      return QueryIntent(
+        tags: [OsmTag(customTagKey!, customTagValue!)],
+        label: label!,
+        rank: rankMode,
+        brandHint: brandHint,
+      );
+    }
+    if (category == null) return null;
+    return IntentService.byCategorySlug(category!, rank: rankMode, brandHint: brandHint);
+  }
+
+  static RankMode _rankFromString(String value) {
+    switch (value) {
+      case 'cheapest':
+        return RankMode.cheapest;
+      case 'open_now':
+        return RankMode.openNow;
+      case 'best_rated':
+        return RankMode.bestRated;
+      default:
+        return RankMode.nearest;
+    }
+  }
+}
+
+/// نتيجة تصنيف الرسالة عبر الخادم الوسيط (Cloudflare Worker + Groq) — قد
+/// تحتوي أكثر من نية واحدة إذا جمعت الرسالة أكثر من طلب مستقل.
+class LlmClassification {
+  final bool isOffTopic;
+  final String? reply;
+  final List<ResolvedIntent> intents;
 
   LlmClassification({
     required this.isOffTopic,
     this.reply,
-    this.categorySlug,
-    this.wantsCheapest = false,
-    this.wantsOpenNow = false,
-    this.brandHint,
-    this.customTagKey,
-    this.customTagValue,
-    this.customLabel,
+    this.intents = const [],
   });
 
-  QueryIntent? toQueryIntent() {
-    if (categorySlug == 'other') {
-      if (customTagKey == null || customTagValue == null || customLabel == null) return null;
-      return QueryIntent(
-        tags: [OsmTag(customTagKey!, customTagValue!)],
-        label: customLabel!,
-        wantsCheapest: wantsCheapest,
-        wantsOpenNow: wantsOpenNow,
-        brandHint: brandHint,
-      );
-    }
-    if (categorySlug == null) return null;
-    return IntentService.byCategorySlug(
-      categorySlug!,
-      wantsCheapest: wantsCheapest,
-      wantsOpenNow: wantsOpenNow,
-      brandHint: brandHint,
-    );
-  }
+  List<QueryIntent> toQueryIntents() =>
+      intents.map((i) => i.toQueryIntent()).whereType<QueryIntent>().toList();
 }
 
 /// يصنّف رسالة المستخدم عبر LLM (Groq) من خلال خادم وسيط يخفي مفتاح الـ API.
@@ -73,26 +100,29 @@ class LlmIntentService {
       if (response.statusCode != 200) return null;
 
       final data = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
-      final category = data['category'] as String?;
-      if (category == null) return null;
 
-      if (category == 'off_topic') {
+      if (data['offTopic'] == true) {
         return LlmClassification(isOffTopic: true, reply: data['reply'] as String?);
       }
 
-      final customTag = data['customTag'] as Map<String, dynamic>?;
+      final rawIntents = (data['intents'] as List?) ?? [];
+      if (rawIntents.isEmpty) return null;
 
-      return LlmClassification(
-        isOffTopic: false,
-        reply: data['reply'] as String?,
-        categorySlug: category,
-        wantsCheapest: data['wantsCheapest'] == true,
-        wantsOpenNow: data['wantsOpenNow'] == true,
-        brandHint: data['brandHint'] as String?,
-        customTagKey: customTag?['key'] as String?,
-        customTagValue: customTag?['value'] as String?,
-        customLabel: data['label'] as String?,
-      );
+      final intents = rawIntents.map((raw) {
+        final map = raw as Map<String, dynamic>;
+        final customTag = map['customTag'] as Map<String, dynamic>?;
+        return ResolvedIntent(
+          kind: map['kind'] as String? ?? 'place',
+          category: map['category'] as String?,
+          rank: map['rank'] as String? ?? 'nearest',
+          brandHint: map['brandHint'] as String?,
+          customTagKey: customTag?['key'] as String?,
+          customTagValue: customTag?['value'] as String?,
+          label: map['label'] as String?,
+        );
+      }).toList();
+
+      return LlmClassification(isOffTopic: false, intents: intents);
     } catch (_) {
       return null;
     }

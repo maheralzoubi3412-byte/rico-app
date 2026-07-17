@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import '../models/chat_message.dart';
+import '../services/deals_service.dart';
 import '../services/intent_service.dart';
 import '../services/llm_intent_service.dart';
 import '../services/location_service.dart';
@@ -25,6 +26,7 @@ class _ChatScreenState extends State<ChatScreen> {
   final LocationService _locationService = LocationService();
   final PlacesService _placesService = PlacesService();
   final SessionMemoryService _sessionMemory = SessionMemoryService();
+  final DealsService _dealsService = DealsService();
 
   static final RegExp _homeMention = RegExp('بيتي|منزلي|البيت');
 
@@ -91,6 +93,84 @@ class _ChatScreenState extends State<ChatScreen> {
     });
   }
 
+  /// يحل نية واحدة (مكان أو عروض) إلى رسالة رد جاهزة، مع عزل الأخطاء داخل
+  /// النية نفسها (فشل نية واحدة من عدة نوايا في نفس الرسالة لا يوقف البقية).
+  Future<ChatMessage> _resolveIntentMessage(
+    QueryIntent intent,
+    ({double lat, double lng, bool offerSaveHome}) origin,
+    bool usedFallback,
+  ) async {
+    if (intent.kind == IntentKind.deals) {
+      try {
+        final deals = await _dealsService.fetchNearby(lat: origin.lat, lng: origin.lng);
+        if (deals.isEmpty) {
+          return ChatMessage(text: 'ما لقيت عروض قريبة منك حالياً 😕', sender: MessageSender.bot);
+        }
+        return ChatMessage(
+          text: 'هذي أقرب العروض المتوفرة:',
+          sender: MessageSender.bot,
+          deals: deals,
+        );
+      } on DealsException catch (e) {
+        return ChatMessage(text: e.message, sender: MessageSender.bot);
+      } catch (_) {
+        return ChatMessage(text: 'تعذر جلب العروض حالياً 😕', sender: MessageSender.bot);
+      }
+    }
+
+    try {
+      final places = await _placesService.search(
+        userLat: origin.lat,
+        userLng: origin.lng,
+        tags: intent.tags,
+        cheapest: intent.wantsCheapest,
+        openNow: intent.wantsOpenNow,
+        bestRated: intent.rank == RankMode.bestRated,
+        brandHint: intent.brandHint,
+        categorySlug: intent.slug,
+      );
+
+      if (places.isEmpty) {
+        return ChatMessage(
+          text: 'لم أجد ${intent.label} قريب منك حالياً 😕 جرّب توسيع نطاق البحث أو نوع مختلف.',
+          sender: MessageSender.bot,
+        );
+      }
+
+      // نميّز بين ترتيب حقيقي فعلاً (وصل من rico-api ومعه بيانات سعر/تقييم)
+      // وبين رجوع Overpass الاحتياطي (بلا هذه البيانات) — حتى لا نوهم
+      // المستخدم بترتيب حقيقي غير موجود فعلياً.
+      var introText = 'هذي أقرب ${intent.label} لموقعك:';
+
+      if (intent.wantsCheapest) {
+        introText = places.first.priceLevel != null
+            ? 'رتبت لك ${intent.label} من الأرخص للأغلى فعلياً حسب الأسعار:'
+            : 'رتبت لك أقرب ${intent.label} (الأقرب غالباً أوفر بسبب توفير وقت ومشوار):';
+      } else if (intent.rank == RankMode.bestRated) {
+        introText = places.first.rating != null
+            ? 'رتبت لك ${intent.label} من الأعلى تقييماً:'
+            : 'هذي أقرب ${intent.label} لموقعك (ما توفرت بيانات تقييم كافية بعد):';
+      }
+
+      if (intent.wantsOpenNow) {
+        final anyConfirmedOpen = places.any((p) => p.isOpenNow == true);
+        introText = anyConfirmedOpen
+            ? 'هذي أقرب ${intent.label} المفتوحة الآن:'
+            : 'ما قدرت أتأكد من مواعيد الدوام بدقة، بس هذي أقرب ${intent.label}:';
+      }
+
+      if (usedFallback) {
+        introText += '\n(ما قدرت أتأكد من نوع طلبك بدقة، صحح لي إذا ما كان قصدك 🙂)';
+      }
+
+      return ChatMessage(text: introText, sender: MessageSender.bot, places: places);
+    } on PlacesException catch (e) {
+      return ChatMessage(text: e.message, sender: MessageSender.bot);
+    } catch (_) {
+      return ChatMessage(text: 'حدث خطأ غير متوقع، حاول مرة أخرى 😕', sender: MessageSender.bot);
+    }
+  }
+
   Future<void> _handleSend() async {
     final text = _controller.text.trim();
     if (text.isEmpty || _sending) return;
@@ -108,7 +188,6 @@ class _ChatScreenState extends State<ChatScreen> {
 
     try {
       final classification = await LlmIntentService.classify(text, history: _buildHistory());
-      final usedFallback = classification == null;
 
       if (classification != null && classification.isOffTopic) {
         setState(() {
@@ -122,67 +201,59 @@ class _ChatScreenState extends State<ChatScreen> {
         return;
       }
 
-      // نستبدل نص "يبحث..." برد طبيعي قصير من الـLLM يقرّ بطلب المستخدم تحديداً
-      if (classification?.reply != null) {
-        setState(() {
-          _messages[_messages.length - 1] = ChatMessage(
-            text: classification!.reply!,
-            sender: MessageSender.bot,
-            isLoading: true,
-          );
-        });
+      final lastCategorySlug = await _sessionMemory.getLastCategorySlug();
+      var intents = classification?.toQueryIntents() ?? const <QueryIntent>[];
+      final usedFallback = classification == null || intents.isEmpty;
+      if (intents.isEmpty) {
+        intents = IntentService.parseMulti(text, lastCategorySlug: lastCategorySlug);
       }
 
-      final lastCategorySlug = await _sessionMemory.getLastCategorySlug();
-      final intent = classification?.toQueryIntent() ??
-          IntentService.parse(text, lastCategorySlug: lastCategorySlug);
       final origin = await _resolveOrigin(text);
 
-      if (intent.slug != null) {
-        await _sessionMemory.saveLastCategorySlug(intent.slug!);
-      }
-
-      final places = await _placesService.search(
-        userLat: origin.lat,
-        userLng: origin.lng,
-        tags: intent.tags,
-        cheapest: intent.wantsCheapest,
-        openNow: intent.wantsOpenNow,
-        brandHint: intent.brandHint,
-      );
+      // نستبدل رسالة "يبحث..." الواحدة بفقاعة تحميل واحدة لكل نية مستقلة،
+      // بنفس ترتيب النوايا، ثم نملأ كل واحدة بمجرد جاهزيتها (بالتوازي، دون
+      // انتظار بعضها البعض) — هذا ما يجعل الرد على رسالة مركّبة (مثل "أقرب
+      // مطعم أو أرخص كافيه، وايش العروض المتوفرة؟") يظهر كفقاعات منفصلة.
+      final placeholders = [
+        for (final intent in intents)
+          ChatMessage(
+            text: intent.kind == IntentKind.deals
+                ? 'يتحقق من العروض القريبة...'
+                : 'يبحث عن ${intent.label}...',
+            sender: MessageSender.bot,
+            isLoading: true,
+          ),
+      ];
 
       setState(() {
-        _messages.removeLast(); // إزالة رسالة "يبحث..."
-        if (places.isEmpty) {
-          _messages.add(ChatMessage(
-            text: 'لم أجد ${intent.label} قريب منك حالياً 😕 جرّب توسيع نطاق البحث أو نوع مختلف.',
-            sender: MessageSender.bot,
-          ));
-        } else {
-          var introText = intent.wantsCheapest
-              ? 'رتبت لك أقرب ${intent.label} (الأقرب غالباً أوفر بسبب توفير وقت ومشوار):'
-              : 'هذي أقرب ${intent.label} لموقعك:';
+        _messages.removeLast(); // إزالة رسالة "يبحث..." الأولية
+        _messages.addAll(placeholders);
+      });
+      final startIndex = _messages.length - placeholders.length;
+      _scrollToBottom();
 
-          if (intent.wantsOpenNow) {
-            final anyConfirmedOpen = places.any((p) => p.isOpenNow == true);
-            introText = anyConfirmedOpen
-                ? 'هذي أقرب ${intent.label} المفتوحة الآن:'
-                : 'ما قدرت أتأكد من مواعيد الدوام بدقة، بس هذي أقرب ${intent.label}:';
-          }
+      final futures = <Future<void>>[];
+      for (var i = 0; i < intents.length; i++) {
+        final index = startIndex + i;
+        futures.add(
+          _resolveIntentMessage(intents[i], origin, usedFallback).then((message) {
+            if (!mounted) return;
+            setState(() => _messages[index] = message);
+            _scrollToBottom();
+          }),
+        );
+      }
+      await Future.wait(futures);
 
-          if (usedFallback) {
-            introText +=
-                '\n(ما قدرت أتأكد من نوع طلبك بدقة، صحح لي إذا ما كان قصدك 🙂)';
-          }
-
-          _messages.add(ChatMessage(
-            text: introText,
-            sender: MessageSender.bot,
-            places: places,
-          ));
+      for (final intent in intents) {
+        if (intent.kind == IntentKind.place && intent.slug != null) {
+          await _sessionMemory.saveLastCategorySlug(intent.slug!);
+          break;
         }
+      }
 
-        if (origin.offerSaveHome) {
+      if (origin.offerSaveHome && mounted) {
+        setState(() {
           _messages.add(ChatMessage(
             text: 'تبي أحفظ موقعك الحالي كـ"بيتي" عشان أستخدمه في طلباتك الجاية؟',
             sender: MessageSender.bot,
@@ -199,9 +270,11 @@ class _ChatScreenState extends State<ChatScreen> {
               _scrollToBottom();
             },
           ));
-        }
-      });
+        });
+      }
     } on LocationException catch (e) {
+      // فشل تحديد نقطة الانطلاق نفسها (قبل إنشاء فقاعات النوايا) — يوقف
+      // الرد كاملاً لأن كل النوايا تعتمد على الموقع.
       setState(() {
         _messages.removeLast();
         _messages.add(ChatMessage(
@@ -216,11 +289,6 @@ class _ChatScreenState extends State<ChatScreen> {
             LocationErrorType.unknown => null,
           },
         ));
-      });
-    } on PlacesException catch (e) {
-      setState(() {
-        _messages.removeLast();
-        _messages.add(ChatMessage(text: e.message, sender: MessageSender.bot));
       });
     } catch (e) {
       setState(() {
@@ -291,6 +359,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   _quickChip('أرخص كافيه'),
                   _quickChip('أقرب صيدلية'),
                   _quickChip('أقرب محطة بنزين'),
+                  _quickChip('العروض القريبة'),
                 ],
               ),
             ),

@@ -9,6 +9,9 @@ class PlaceResult {
   final double? distanceMeters;
   final double lat;
   final double lng;
+  final int? priceLevel; // 1-4، من rico-api فقط (Overpass لا يوفرها)
+  final double? rating; // 0-5، من rico-api فقط
+  final int? ratingCount;
 
   PlaceResult({
     required this.osmId,
@@ -19,6 +22,9 @@ class PlaceResult {
     this.phone,
     this.openingHours,
     this.distanceMeters,
+    this.priceLevel,
+    this.rating,
+    this.ratingCount,
   });
 
   /// يبني عنصر مكان من استجابة Overpass API (OpenStreetMap)
@@ -55,6 +61,24 @@ class PlaceResult {
     );
   }
 
+  /// يبني عنصر مكان من استجابة rico-api (GET /search) — قد تحتوي بيانات سعر
+  /// وتقييم حقيقية غير متوفرة في Overpass.
+  factory PlaceResult.fromRicoApiJson(Map<String, dynamic> json) {
+    return PlaceResult(
+      osmId: json['id'] as String,
+      name: (json['nameAr'] ?? json['name']) as String,
+      address: (json['address'] as String?) ?? '',
+      lat: (json['lat'] as num).toDouble(),
+      lng: (json['lng'] as num).toDouble(),
+      phone: json['phone'] as String?,
+      openingHours: json['openingHours'] as String?,
+      distanceMeters: (json['distanceMeters'] as num?)?.toDouble(),
+      priceLevel: json['priceLevel'] as int?,
+      rating: (json['rating'] as num?)?.toDouble(),
+      ratingCount: json['ratingCount'] as int?,
+    );
+  }
+
   PlaceResult copyWithDistance(double meters) {
     return PlaceResult(
       osmId: osmId,
@@ -65,6 +89,9 @@ class PlaceResult {
       phone: phone,
       openingHours: openingHours,
       distanceMeters: meters,
+      priceLevel: priceLevel,
+      rating: rating,
+      ratingCount: ratingCount,
     );
   }
 
@@ -78,6 +105,12 @@ class PlaceResult {
     }
     return '${(distanceMeters! / 1000).toStringAsFixed(1)} كم';
   }
+
+  /// رمز السعر بتكرار رمز الريال حسب المستوى (1-4)، أو null إن لم تتوفر بيانات سعر.
+  String? get priceLevelLabel =>
+      priceLevel == null ? null : List.filled(priceLevel!, '﷼').join();
+
+  String? get ratingLabel => rating == null ? null : '★ ${rating!.toStringAsFixed(1)}';
 
   /// رابط خرائط جوجل بالاعتماد على الإحداثيات فقط (بدون الحاجة لـ place_id مدفوع)
   String get googleMapsUrl =>
@@ -96,6 +129,9 @@ class PlaceResult {
         'lng': lng,
         'phone': phone,
         'openingHours': openingHours,
+        'priceLevel': priceLevel,
+        'rating': rating,
+        'ratingCount': ratingCount,
       };
 
   factory PlaceResult.fromJson(Map<String, dynamic> json) {
@@ -107,6 +143,9 @@ class PlaceResult {
       lng: (json['lng'] as num).toDouble(),
       phone: json['phone'] as String?,
       openingHours: json['openingHours'] as String?,
+      priceLevel: json['priceLevel'] as int?,
+      rating: (json['rating'] as num?)?.toDouble(),
+      ratingCount: json['ratingCount'] as int?,
     );
   }
 }

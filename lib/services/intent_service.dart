@@ -5,23 +5,34 @@ class OsmTag {
   const OsmTag(this.key, this.value);
 }
 
-/// نية المستخدم بعد تحليل رسالته
+/// طريقة ترتيب النتائج المطلوبة. best_rated غير مفعّلة فعلياً بعد (تحتاج
+/// بيانات تقييم حقيقية غير متوفرة في OSM) — محجوزة للمرحلة القادمة.
+enum RankMode { nearest, cheapest, openNow, bestRated }
+
+/// نوع النية: بحث عن مكان، أو استفسار عن عروض/خصومات (لا يرتبط بفئة مكان).
+enum IntentKind { place, deals }
+
+/// نية واحدة من نوايا رسالة المستخدم (قد تحتوي الرسالة الواحدة عدة نوايا،
+/// انظر [IntentService.parseMulti]).
 class QueryIntent {
-  final List<OsmTag> tags; // كل الوسوم البديلة المقبولة لهذه الفئة
+  final IntentKind kind;
+  final List<OsmTag> tags; // فارغة لنوايا kind=deals
   final String label; // اسم عربي مفهوم للعرض في الرد
-  final bool wantsCheapest;
-  final bool wantsOpenNow;
+  final RankMode rank;
   final String? brandHint;
-  final String? slug; // null للفئات الحرة (other) غير الثابتة
+  final String? slug; // null لنوايا deals وللفئات الحرة (other) غير الثابتة
 
   QueryIntent({
-    required this.tags,
+    this.kind = IntentKind.place,
+    this.tags = const [],
     required this.label,
-    this.wantsCheapest = false,
-    this.wantsOpenNow = false,
+    this.rank = RankMode.nearest,
     this.brandHint,
     this.slug,
   });
+
+  bool get wantsCheapest => rank == RankMode.cheapest;
+  bool get wantsOpenNow => rank == RankMode.openNow;
 }
 
 class IntentService {
@@ -105,6 +116,26 @@ class IntentService {
   // (تستخدم فقط عند فشل مطابقة أي كلمة فئة وتوفر فئة سابقة من نفس الجلسة)
   static const String _continuationWords = 'نفس الشي|نفس الشيء|زيادة|أبعد|ابعد|أكثر|اكثر|غيره|غيرها';
 
+  // كلمات تدل على نية "عروض/خصومات" (بحث منفصل عن أي فئة مكان)
+  static final RegExp _dealsWords = RegExp('عروض|عرض|خصم|خصومات');
+
+  // فاصل بين نوايا متعددة في رسالة واحدة: "و"/"أو" كمحرف مستقل (بمسافة على
+  // الجانبين لتفادي قطع كلمات تبدأ بـ"و" مثل "وايش")، أو فاصلة عربية/إنجليزية
+  static final RegExp _intentSeparator = RegExp(r'\s+(?:و|أو)\s+|،|,');
+
+  // أقصى عدد نوايا نستخرجها من رسالة واحدة، يطابق الحد نفسه في مصنّف الـLLM
+  static const int _maxIntents = 3;
+
+  static RankMode _detectRank(String text) {
+    if (RegExp(r'مفتوح الحين|مفتوح الآن|مفتوح الان|فاتح الحين|فاتح الآن|فاتح الان').hasMatch(text)) {
+      return RankMode.openNow;
+    }
+    if (RegExp(r'أرخص|ارخص|أوفر|اوفر|رخيص').hasMatch(text)) {
+      return RankMode.cheapest;
+    }
+    return RankMode.nearest;
+  }
+
   static QueryIntent parse(String rawText, {String? lastCategorySlug}) {
     final text = rawText.trim();
 
@@ -130,26 +161,50 @@ class IntentService {
     // افتراضي منطقي لأغلب الاستخدام إذا لم تُطابق أي فئة ولا استكمال: مطعم
     chosen ??= _categories.first;
 
-    final wantsCheapest =
-        RegExp(r'أرخص|ارخص|أوفر|اوفر|عرض|عروض|رخيص').hasMatch(text);
-    final wantsOpenNow =
-        RegExp(r'مفتوح الحين|مفتوح الآن|مفتوح الان|فاتح الحين|فاتح الآن|فاتح الان').hasMatch(text);
-
     return QueryIntent(
       tags: chosen['tags'] as List<OsmTag>,
       label: chosen['label'] as String,
-      wantsCheapest: wantsCheapest,
-      wantsOpenNow: wantsOpenNow,
+      rank: _detectRank(text),
       slug: chosen['slug'] as String,
     );
+  }
+
+  /// يفكك رسالة واحدة إلى عدة نوايا مستقلة إذا جمعت أكثر من طلب (مثال:
+  /// "أقرب مطعم أو أرخص كافيه، وايش العروض المتوفرة؟" → ٣ نوايا مستقلة).
+  /// هذا مسار بديل محلي يُستخدم فقط عند فشل مصنّف الـLLM؛ لا يحاول فصل نية
+  /// مكان عن نية عروض مذكورتين معاً داخل نفس الجزء النصي (مثال: "مطعم فيه
+  /// عروض" تُعامل كنية عروض فقط) — الفصل الدقيق متروك لمصنّف الـLLM.
+  static List<QueryIntent> parseMulti(String rawText, {String? lastCategorySlug}) {
+    final text = rawText.trim();
+    if (text.isEmpty) return [];
+
+    final fragments = text
+        .split(_intentSeparator)
+        .map((f) => f.trim())
+        .where((f) => f.isNotEmpty)
+        .toList();
+
+    if (fragments.isEmpty) {
+      return [parse(text, lastCategorySlug: lastCategorySlug)];
+    }
+
+    final intents = <QueryIntent>[];
+    for (final fragment in fragments) {
+      if (_dealsWords.hasMatch(fragment)) {
+        intents.add(QueryIntent(kind: IntentKind.deals, label: 'العروض'));
+      } else {
+        intents.add(parse(fragment, lastCategorySlug: lastCategorySlug));
+      }
+    }
+
+    return intents.take(_maxIntents).toList();
   }
 
   /// يبني QueryIntent من فئة معروفة (slug)، تستخدم لتحويل نتيجة تصنيف LLM
   /// إلى نية بحث فعلية.
   static QueryIntent? byCategorySlug(
     String slug, {
-    bool wantsCheapest = false,
-    bool wantsOpenNow = false,
+    RankMode rank = RankMode.nearest,
     String? brandHint,
   }) {
     for (final category in _categories) {
@@ -157,8 +212,7 @@ class IntentService {
         return QueryIntent(
           tags: category['tags'] as List<OsmTag>,
           label: category['label'] as String,
-          wantsCheapest: wantsCheapest,
-          wantsOpenNow: wantsOpenNow,
+          rank: rank,
           brandHint: brandHint,
           slug: slug,
         );
