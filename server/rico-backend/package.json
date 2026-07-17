@@ -7,7 +7,7 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
-    "build": "npm install --prefix client && npm run build --prefix client"
+    "build": "npm install --prefix client --include=dev && npm run build --prefix client"
   },
   "dependencies": {
     "connect-mongo": "^5.1.0",
