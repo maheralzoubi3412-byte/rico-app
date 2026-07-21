@@ -23,6 +23,31 @@ class AppRadii {
   static const double input = 24;
 }
 
+/// ألوان شاشة المحادثة الداكنة فقط (مطابقة لتصميم RICO GO) — مستخدمة حصراً
+/// في chat_screen.dart والودجتس التابعة لها؛ باقي الشاشات تبقى على الثيم
+/// الفاتح في [AppColors].
+class ChatColors {
+  ChatColors._();
+
+  static const Color background = Color(0xFF0A0F18);
+  static const Color card = Color(0xFF0F1826);
+  static const Color botBubble = Color(0xFF141D2A);
+  static const Color composer = Color(0xFF121A26);
+
+  static const Color accent = Color(0xFF22C55E); // --acc
+  static const Color accentBright = Color(0xFF2EE57C); // --accB
+  static const Color accentDark = Color(0xFF1C8F4E); // --accD (user bubble bg)
+  static const Color gold = Color(0xFFC9A24A);
+
+  static const Color textPrimary = Color(0xFFE6E9EF);
+  static const Color textMuted = Color(0xFF8A93A5);
+  static const Color textFaint = Color(0xFF5C6678);
+  static const Color hintText = Color(0xFF6C7688);
+
+  static const Color borderSubtle = Color(0x12FFFFFF); // rgba(255,255,255,0.07)
+  static const Color borderMedium = Color(0x1EFFFFFF); // rgba(255,255,255,0.12)
+}
+
 class AppTheme {
   AppTheme._();
 

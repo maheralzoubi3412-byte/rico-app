@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
+import '../demo/demo_order.dart';
 import '../models/chat_message.dart';
+import '../models/place_result.dart';
 import '../services/deals_service.dart';
 import '../services/intent_service.dart';
 import '../services/llm_intent_service.dart';
@@ -9,6 +11,7 @@ import '../services/places_service.dart';
 import '../services/session_memory_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/message_bubble.dart';
+import '../widgets/rico_logo_mark.dart';
 import 'favorites_screen.dart';
 
 class ChatScreen extends StatefulWidget {
@@ -70,7 +73,7 @@ class _ChatScreenState extends State<ChatScreen> {
   /// "بس أبعد شوي" بدل معاملة كل رسالة بمعزل عمّا سبقها.
   List<Map<String, String>> _buildHistory() {
     final relevant = _messages
-        .where((m) => !m.isLoading && m.text.isNotEmpty)
+        .where((m) => !m.isLoading && m.text.isNotEmpty && !m.isDemo)
         .toList();
     final recent = relevant.length > 6 ? relevant.sublist(relevant.length - 6) : relevant;
     return recent
@@ -163,7 +166,14 @@ class _ChatScreenState extends State<ChatScreen> {
         introText += '\n(ما قدرت أتأكد من نوع طلبك بدقة، صحح لي إذا ما كان قصدك 🙂)';
       }
 
-      return ChatMessage(text: introText, sender: MessageSender.bot, places: places);
+      return ChatMessage(
+        text: introText,
+        sender: MessageSender.bot,
+        places: places,
+        understandingIntent: intent,
+        onOrder: _startDemoOrder,
+        onQuickReply: _sendQuickReply,
+      );
     } on PlacesException catch (e) {
       return ChatMessage(text: e.message, sender: MessageSender.bot);
     } catch (_) {
@@ -222,6 +232,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 : 'يبحث عن ${intent.label}...',
             sender: MessageSender.bot,
             isLoading: true,
+            understandingIntent: intent,
           ),
       ];
 
@@ -304,10 +315,20 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  /// يُشغَّل من حبات الاقتراح السريع أسفل نتائج البحث (مثل "أبغى أرخص") —
+  /// يمرّ عبر نفس خط أنابيب التصنيف الفعلي بدل فلترة وهمية على القائمة
+  /// المعروضة، تماماً كما تفعل chips الاقتراحات الأولية أعلى الشاشة.
+  void _sendQuickReply(String text) {
+    if (_sending) return;
+    _controller.text = text;
+    _handleSend();
+  }
+
   Widget _quickChip(String label) {
     return ActionChip(
-      label: Text(label, style: const TextStyle(fontSize: 12.5)),
-      backgroundColor: AppColors.surfaceMuted,
+      label: Text(label, style: const TextStyle(fontSize: 12.5, color: ChatColors.textPrimary)),
+      backgroundColor: ChatColors.card,
+      side: const BorderSide(color: ChatColors.borderSubtle),
       onPressed: _sending
           ? null
           : () {
@@ -317,21 +338,79 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
+  /// يبدأ عرض الطلب التجريبي الدائم (لا يوجد نظام طلبات/دفع/توصيل حقيقي —
+  /// انظر lib/demo/demo_order.dart) لمكان حقيقي تم اختياره من نتائج بحث فعلية.
+  void _startDemoOrder(PlaceResult place) {
+    final order = DemoOrder.forPlace(place.name);
+    final index = _messages.length;
+    setState(() {
+      _messages.add(ChatMessage(
+        text: '',
+        sender: MessageSender.bot,
+        demoOrder: order,
+        onDemoConfirmed: () => _confirmDemoOrder(index),
+      ));
+    });
+    _scrollToBottom();
+  }
+
+  void _confirmDemoOrder(int index) {
+    if (index >= _messages.length) return;
+    final current = _messages[index];
+    if (current.demoOrder == null) return;
+    setState(() {
+      _messages[index] = current.copyWith(
+        demoOrder: current.demoOrder!.copyWith(stage: DemoOrderStage.tracking),
+      );
+    });
+    _scrollToBottom();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
-        backgroundColor: AppColors.background,
+        backgroundColor: ChatColors.background,
         appBar: AppBar(
-          backgroundColor: AppColors.primary,
+          backgroundColor: ChatColors.background,
           elevation: 0,
-          title: const Row(
+          iconTheme: const IconThemeData(color: ChatColors.textPrimary),
+          title: Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
-              Text('ريكو', style: TextStyle(fontWeight: FontWeight.bold)),
-              SizedBox(width: 8),
-              Icon(Icons.location_on, size: 20),
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  const Text('ريكو',
+                      style: TextStyle(color: ChatColors.textPrimary, fontWeight: FontWeight.bold, fontSize: 16)),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text('متصل الآن', style: TextStyle(color: ChatColors.textMuted, fontSize: 11)),
+                      const SizedBox(width: 5),
+                      Container(
+                        width: 6,
+                        height: 6,
+                        decoration: const BoxDecoration(color: ChatColors.accentBright, shape: BoxShape.circle),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              const SizedBox(width: 10),
+              Container(
+                width: 40,
+                height: 40,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF101B2A),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: ChatColors.accentBright.withValues(alpha: 0.35)),
+                ),
+                child: const RicoLogoMark(height: 20, color: Colors.white),
+              ),
             ],
           ),
           actions: [
@@ -374,30 +453,40 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
             SafeArea(
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 decoration: const BoxDecoration(
-                  color: Colors.white,
-                  border: Border(top: BorderSide(color: AppColors.border)),
+                  color: ChatColors.background,
+                  border: Border(top: BorderSide(color: ChatColors.borderSubtle)),
                 ),
                 child: Row(
                   children: [
-                    IconButton(
-                      icon: const Icon(Icons.send, color: AppColors.primary),
-                      onPressed: _handleSend,
+                    InkWell(
+                      onTap: _handleSend,
+                      borderRadius: BorderRadius.circular(22),
+                      child: Container(
+                        width: 44,
+                        height: 44,
+                        decoration: const BoxDecoration(color: ChatColors.accent, shape: BoxShape.circle),
+                        child: const Icon(Icons.send, color: Color(0xFF04140A), size: 20),
+                      ),
                     ),
+                    const SizedBox(width: 10),
                     Expanded(
                       child: TextField(
                         controller: _controller,
                         textAlign: TextAlign.right,
+                        style: const TextStyle(color: ChatColors.textPrimary),
+                        cursorColor: ChatColors.accentBright,
                         onSubmitted: (_) => _handleSend(),
                         decoration: InputDecoration(
                           hintText: 'اكتب طلبك... مثل "أقرب مطعم"',
+                          hintStyle: const TextStyle(color: ChatColors.hintText),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(AppRadii.input),
                             borderSide: BorderSide.none,
                           ),
                           filled: true,
-                          fillColor: AppColors.surfaceMuted,
+                          fillColor: ChatColors.composer,
                           contentPadding:
                               const EdgeInsets.symmetric(horizontal: 16),
                         ),
