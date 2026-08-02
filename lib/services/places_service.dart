@@ -61,11 +61,14 @@ class PlacesService {
     return buffer.toString();
   }
 
-  // rico-api يوفر ترتيباً حقيقياً (سعر/تقييم فعليين) لكن تغطيته محدودة حالياً
-  // بالمناطق التي زُوّدت ببيانات جوجل — Overpass يبقى المصدر الاحتياطي دوماً
-  // لأنه يغطي كل السعودية. لا معنى لطلب أرخص/أعلى تقييماً بعلامة تجارية محددة
-  // (brandHint) لأن /search لا يفلتر بالاسم بعد، فنتجاهله في هذه الحالة.
-  static const String _ricoApiBaseUrl = 'https://rico-api.rico-app-maher.workers.dev';
+  // rico-backend (NestJS، يستبدل rico-api القديم) يوفر ترتيباً حقيقياً
+  // (سعر/تقييم فعليين) لكن تغطيته محدودة حالياً بالمناطق التي زُوّدت ببيانات
+  // جوجل — Overpass يبقى المصدر الاحتياطي دوماً لأنه يغطي كل السعودية. لا
+  // معنى لطلب أرخص/أعلى تقييماً بعلامة تجارية محددة (brandHint) لأن /search
+  // لا يفلتر بالاسم بعد، فنتجاهله في هذه الحالة.
+  // TODO: حدّث هذا الرابط بعد نشر rico-backend (Render). للتجربة المحلية:
+  // http://localhost:3000 (iOS Simulator/سطح المكتب) أو http://10.0.2.2:3000 (Android Emulator).
+  static const String _ricoApiBaseUrl = 'http://localhost:3000';
 
   Future<List<PlaceResult>> search({
     required double userLat,

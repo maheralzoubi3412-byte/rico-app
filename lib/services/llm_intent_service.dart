@@ -78,8 +78,12 @@ class LlmClassification {
 /// لا يُلقي أي استثناء أبداً؛ عند أي عطل (شبكة/مهلة/رد غير متوقع) يرجع null
 /// ليستخدم المستدعي التصنيف المحلي القائم على الكلمات المفتاحية كخطة بديلة.
 class LlmIntentService {
-  static const String _proxyUrl =
-      'https://rico-intent-proxy.rico-app-maher.workers.dev';
+  // rico-backend (NestJS، يستبدل rico-intent-proxy القديم) يعرض هذا التصنيف
+  // على المسار /classify (وليس الجذر كما كان الحال في الـ Worker القديم).
+  // TODO: حدّث هذا الرابط بعد نشر rico-backend (Render). للتجربة المحلية:
+  // http://localhost:3000/classify (iOS Simulator/سطح المكتب) أو
+  // http://10.0.2.2:3000/classify (Android Emulator).
+  static const String _proxyUrl = 'http://localhost:3000/classify';
 
   static Future<LlmClassification?> classify(
     String message, {

@@ -13,6 +13,11 @@ class PlaceResult {
   final double? rating; // 0-5، من rico-api فقط
   final int? ratingCount;
 
+  /// 'rico' إذا وصل من rico-backend (osmId عندها معرّف Business حقيقي في
+  /// قاعدتنا)، أو 'osm' إذا وصل من Overpass (لا يقابله سجل Business فعلي).
+  /// يُستخدم لتفادي إرسال أحداث تتبّع بمعرّفات لا تقابل نشاطاً تجارياً حقيقياً.
+  final String source;
+
   PlaceResult({
     required this.osmId,
     required this.name,
@@ -25,6 +30,7 @@ class PlaceResult {
     this.priceLevel,
     this.rating,
     this.ratingCount,
+    this.source = 'osm',
   });
 
   /// يبني عنصر مكان من استجابة Overpass API (OpenStreetMap)
@@ -58,6 +64,7 @@ class PlaceResult {
       lng: lng,
       phone: (tags['phone'] ?? tags['contact:phone'])?.toString(),
       openingHours: tags['opening_hours']?.toString(),
+      source: 'osm',
     );
   }
 
@@ -76,6 +83,7 @@ class PlaceResult {
       priceLevel: json['priceLevel'] as int?,
       rating: (json['rating'] as num?)?.toDouble(),
       ratingCount: json['ratingCount'] as int?,
+      source: 'rico',
     );
   }
 
@@ -92,6 +100,7 @@ class PlaceResult {
       priceLevel: priceLevel,
       rating: rating,
       ratingCount: ratingCount,
+      source: source,
     );
   }
 
@@ -132,6 +141,7 @@ class PlaceResult {
         'priceLevel': priceLevel,
         'rating': rating,
         'ratingCount': ratingCount,
+        'source': source,
       };
 
   factory PlaceResult.fromJson(Map<String, dynamic> json) {
@@ -146,6 +156,7 @@ class PlaceResult {
       priceLevel: json['priceLevel'] as int?,
       rating: (json['rating'] as num?)?.toDouble(),
       ratingCount: json['ratingCount'] as int?,
+      source: json['source'] as String? ?? 'osm',
     );
   }
 }

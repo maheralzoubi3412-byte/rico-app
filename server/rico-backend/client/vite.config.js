@@ -1,12 +1,13 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import tailwindcss from '@tailwindcss/vite';
 
 // Dev server proxies API calls to the Express backend on :3000 so
 // `npm run dev` here works against a locally running rico-backend without
 // CORS friction. In production, Express serves this app's build output
 // directly (same origin, no proxy needed).
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), tailwindcss()],
   server: {
     proxy: {
       '/search': 'http://localhost:3000',

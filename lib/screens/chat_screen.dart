@@ -1,13 +1,16 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import '../demo/demo_order.dart';
 import '../models/chat_message.dart';
 import '../models/place_result.dart';
 import '../services/deals_service.dart';
+import '../services/impression_service.dart';
 import '../services/intent_service.dart';
 import '../services/llm_intent_service.dart';
 import '../services/location_service.dart';
 import '../services/places_service.dart';
+import '../services/search_gap_service.dart';
 import '../services/session_memory_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/message_bubble.dart';
@@ -30,6 +33,8 @@ class _ChatScreenState extends State<ChatScreen> {
   final PlacesService _placesService = PlacesService();
   final SessionMemoryService _sessionMemory = SessionMemoryService();
   final DealsService _dealsService = DealsService();
+  final ImpressionService _impressionService = ImpressionService();
+  final SearchGapService _searchGapService = SearchGapService();
 
   static final RegExp _homeMention = RegExp('بيتي|منزلي|البيت');
 
@@ -109,6 +114,9 @@ class _ChatScreenState extends State<ChatScreen> {
         if (deals.isEmpty) {
           return ChatMessage(text: 'ما لقيت عروض قريبة منك حالياً 😕', sender: MessageSender.bot);
         }
+        unawaited(_impressionService.trackItems(
+          deals.map((d) => ImpressionItem(businessId: d.placeId, dealId: d.id)).toList(),
+        ));
         return ChatMessage(
           text: 'هذي أقرب العروض المتوفرة:',
           sender: MessageSender.bot,
@@ -134,10 +142,23 @@ class _ChatScreenState extends State<ChatScreen> {
       );
 
       if (places.isEmpty) {
+        // إشارة استقطاب: لا يوجد نشاط تجاري من هذه الفئة في قاعدتنا بهذه
+        // المنطقة. فقط للفئات الثابتة (categorySlug) — لا معنى لتتبّع نص حر.
+        if (intent.slug != null) {
+          unawaited(_searchGapService.track(categorySlug: intent.slug!, lat: origin.lat, lng: origin.lng));
+        }
         return ChatMessage(
           text: 'لم أجد ${intent.label} قريب منك حالياً 😕 جرّب توسيع نطاق البحث أو نوع مختلف.',
           sender: MessageSender.bot,
         );
+      }
+
+      // نتتبّع الظهور فقط للأماكن التي وصلت من rico-backend (osmId عندها
+      // معرّف Business حقيقي) — نتائج Overpass الاحتياطية لا يقابلها سجل
+      // نشاط تجاري فعلي في قاعدتنا فلا معنى لتتبّعها.
+      final ricoPlaceIds = places.where((p) => p.source == 'rico').map((p) => p.osmId).toList();
+      if (ricoPlaceIds.isNotEmpty) {
+        unawaited(_impressionService.track(ricoPlaceIds));
       }
 
       // نميّز بين ترتيب حقيقي فعلاً (وصل من rico-api ومعه بيانات سعر/تقييم)
