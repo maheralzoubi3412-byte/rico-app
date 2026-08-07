@@ -3,7 +3,8 @@
 NestJS + MongoDB backend for Rico: a local business discovery platform. Combines:
 
 - A product-catalog MVP (`Business` → `Product` → `Discount`) with a rule-based, non-LLM query parser (category/attribute dictionaries + typo-tolerant fuzzy matching).
-- Everything the previous Express backend already had: geo search (`/search`) and nearby deals (`/deals`) with response shapes kept **byte-identical** to the old `rico-api`/`groq-proxy` Cloudflare Workers so the Flutter app only needs its base URLs updated — plus business self-serve accounts (magic-link login), place claims, deal moderation, an admin panel, and Google Places sync.
+- Everything the previous Express backend already had: geo search (`/search`) and nearby deals (`/deals`) with response shapes kept **byte-identical** to the old `rico-api`/`groq-proxy` Cloudflare Workers so the Flutter app only needs its base URLs updated — plus a vendor self-serve dashboard (email+password login, products/discounts/deals), place claims with owner moderation, and a platform-owner dashboard (business oversight, deal/claim moderation, Google Places sync, analytics, staff, audit log).
+- A single unified `Account` model (`app: 'owner'|'vendor'`) backing one `/auth/*` login surface for both dashboards — no separate admin token or magic-link flow.
 - A multi-intent Arabic classifier (`/classify`) backed by Groq, ported from `groq-proxy`.
 
 ## Requirements
@@ -20,15 +21,14 @@ Copy `.env.example` to `.env` and fill in:
 | `MONGODB_URI` | yes | Mongo connection string |
 | `NODE_ENV` | no | `production` enables secure session cookies |
 | `PORT` | no | default `3000` |
-| `SESSION_SECRET` | yes (prod) | signs the business-dashboard session cookie |
-| `ADMIN_TOKEN` | yes | static bearer token for all `/admin/*` routes |
+| `SESSION_SECRET` | yes (prod) | signs the owner/vendor dashboard session cookie |
 | `OWNER_EMAIL` / `OWNER_PASSWORD` | no | seeds the first `/owner/dashboard` login on first boot only (no-op if an owner account already exists); defaults to `owner@rico.app` / `ChangeMe123!` if unset — change these before a real deploy |
-| `GOOGLE_PLACES_API_KEY` | only for `/admin/sync-google` | Google Places API (New) key |
+| `GOOGLE_PLACES_API_KEY` | only for `/owner/sourcing/sync-google` | Google Places API (New) key |
 | `GOOGLE_PLACES_MONTHLY_CAP` | no | default `200` |
 | `GOOGLE_SYNC_COOLDOWN_DAYS` | no | default `30` |
 | `GROQ_API_KEY` | only for `/classify` | Groq Cloud API key |
-| `GROQ_MODEL` | no | default `meta-llama/llama-4-scout-17b-16e-instruct` |
-| `RESEND_API_KEY` | no | if unset, magic-link emails are logged to the console instead of sent |
+| `GROQ_MODEL` | no | default `llama-3.3-70b-versatile` |
+| `RESEND_API_KEY` | no | if unset, vendor-invite / password-reset emails are logged to the console instead of sent |
 | `RESEND_FROM_EMAIL` | no | default `Rico <onboarding@resend.dev>` |
 
 ## Run locally
@@ -68,8 +68,10 @@ curl "http://localhost:3000/search/products?q=%D8%A3%D8%B1%D8%AE%D8%B5%20%D8%B4%
 curl -X POST "http://localhost:3000/classify" -H "Content-Type: application/json" \
   -d '{"message":"أرخص شاورما قريبة"}'
 
-# Admin (requires ADMIN_TOKEN)
-curl "http://localhost:3000/admin/usage" -H "Authorization: Bearer $ADMIN_TOKEN"
+# Owner login (session cookie), then an owner-only endpoint
+curl -c cookies.txt -X POST "http://localhost:3000/auth/login" -H "Content-Type: application/json" \
+  -d '{"email":"owner@rico.app","password":"ChangeMe123!","app":"owner"}'
+curl -b cookies.txt "http://localhost:3000/owner/sourcing/usage"
 ```
 
 ## Tests
@@ -89,6 +91,7 @@ One web service running the combined API + static self-serve/admin dashboard (`c
 ## Notable design decisions
 
 - **`Business`** absorbs the old `Place` collection — one entity for "a location", referenced by `Product`, `Deal`, and `BusinessClaim`.
-- **`Deal.businessId`** now refers to `Business` (was `Place`); the dashboard-account owner ref was renamed to **`Deal.ownerAccountId`** (refs `BusinessAccount`) to avoid two different "business" meanings on the same document. The public JSON response still calls this field `placeId` for Flutter compatibility.
+- **`Deal.businessId`** now refers to `Business` (was `Place`); the dashboard-account owner ref was renamed to **`Deal.ownerAccountId`** (refs `Account`) to avoid two different "business" meanings on the same document. The public JSON response still calls this field `placeId` for Flutter compatibility.
+- **`Account`** is the single collection backing both dashboards (`app: 'owner'|'vendor'`, `platformRole` set only for owner-app accounts). Vendor accounts are owner-invited (an owner picks a business + email, the claim is created `active` immediately, and the vendor gets a "set your password" email) — there's no public vendor signup. A vendor can still self-serve **claim an additional** business via `/vendor/claim-place`, which lands in `pending_review` and needs an owner's approval via `/owner/claims/:id/status` before it unlocks.
 - **`/classify`** is exposed at `POST /classify` (the old `groq-proxy` Worker served it at its root path) — the Flutter client's base URL constant just gets `/classify` appended.
 - The classifier's category list intentionally has 11 entries, not 12 — `clothing_store` was a bug introduced in the previous Express port that didn't exist in the original Worker or in Flutter's local category enum.

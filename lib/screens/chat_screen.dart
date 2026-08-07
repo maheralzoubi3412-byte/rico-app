@@ -1,15 +1,17 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
-import '../demo/demo_order.dart';
 import '../models/chat_message.dart';
 import '../models/place_result.dart';
+import '../models/request_flow.dart';
+import '../services/catalog_service.dart';
 import '../services/deals_service.dart';
 import '../services/impression_service.dart';
 import '../services/intent_service.dart';
 import '../services/llm_intent_service.dart';
 import '../services/location_service.dart';
 import '../services/places_service.dart';
+import '../services/request_service.dart';
 import '../services/search_gap_service.dart';
 import '../services/session_memory_service.dart';
 import '../theme/app_theme.dart';
@@ -35,6 +37,8 @@ class _ChatScreenState extends State<ChatScreen> {
   final DealsService _dealsService = DealsService();
   final ImpressionService _impressionService = ImpressionService();
   final SearchGapService _searchGapService = SearchGapService();
+  final CatalogService _catalogService = CatalogService();
+  final RequestService _requestService = RequestService();
 
   static final RegExp _homeMention = RegExp('بيتي|منزلي|البيت');
 
@@ -78,7 +82,7 @@ class _ChatScreenState extends State<ChatScreen> {
   /// "بس أبعد شوي" بدل معاملة كل رسالة بمعزل عمّا سبقها.
   List<Map<String, String>> _buildHistory() {
     final relevant = _messages
-        .where((m) => !m.isLoading && m.text.isNotEmpty && !m.isDemo)
+        .where((m) => !m.isLoading && m.text.isNotEmpty && m.requestFlow == null)
         .toList();
     final recent = relevant.length > 6 ? relevant.sublist(relevant.length - 6) : relevant;
     return recent
@@ -125,7 +129,7 @@ class _ChatScreenState extends State<ChatScreen> {
       } on DealsException catch (e) {
         return ChatMessage(text: e.message, sender: MessageSender.bot);
       } catch (_) {
-        return ChatMessage(text: 'تعذر جلب العروض حالياً 😕', sender: MessageSender.bot);
+        return ChatMessage(text: 'ما قدرت أجيب العروض حالياً 😕', sender: MessageSender.bot);
       }
     }
 
@@ -148,7 +152,7 @@ class _ChatScreenState extends State<ChatScreen> {
           unawaited(_searchGapService.track(categorySlug: intent.slug!, lat: origin.lat, lng: origin.lng));
         }
         return ChatMessage(
-          text: 'لم أجد ${intent.label} قريب منك حالياً 😕 جرّب توسيع نطاق البحث أو نوع مختلف.',
+          text: 'ما لقيت ${intent.label} قريب منك حالياً 😕 جرّب توسّع نطاق البحث أو نوع ثاني.',
           sender: MessageSender.bot,
         );
       }
@@ -192,7 +196,7 @@ class _ChatScreenState extends State<ChatScreen> {
         sender: MessageSender.bot,
         places: places,
         understandingIntent: intent,
-        onOrder: _startDemoOrder,
+        onOrder: _openCatalog,
         onQuickReply: _sendQuickReply,
       );
     } on PlacesException catch (e) {
@@ -249,7 +253,7 @@ class _ChatScreenState extends State<ChatScreen> {
         for (final intent in intents)
           ChatMessage(
             text: intent.kind == IntentKind.deals
-                ? 'يتحقق من العروض القريبة...'
+                ? 'يشوف العروض القريبة...'
                 : 'يبحث عن ${intent.label}...',
             sender: MessageSender.bot,
             isLoading: true,
@@ -326,7 +330,7 @@ class _ChatScreenState extends State<ChatScreen> {
       setState(() {
         _messages.removeLast();
         _messages.add(ChatMessage(
-          text: 'حدث خطأ غير متوقع، حاول مرة أخرى 😕',
+          text: 'صار خطأ ما توقعته، حاول مرة ثانية 😕',
           sender: MessageSender.bot,
         ));
       });
@@ -359,32 +363,125 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  /// يبدأ عرض الطلب التجريبي الدائم (لا يوجد نظام طلبات/دفع/توصيل حقيقي —
-  /// انظر lib/demo/demo_order.dart) لمكان حقيقي تم اختياره من نتائج بحث فعلية.
-  void _startDemoOrder(PlaceResult place) {
-    final order = DemoOrder.forPlace(place.name);
+  /// يفتح تصفّح منتجات وعروض نشاط حقيقي (source == 'rico') تم اختياره من
+  /// نتائج بحث فعلية — يجلبها من rico-backend ويعرضها كبطاقة قابلة للاختيار
+  /// ضمن [RequestFlow]، بديلاً حقيقياً لتدفّق الطلب التجريبي القديم.
+  Future<void> _openCatalog(PlaceResult place) async {
     final index = _messages.length;
     setState(() {
-      _messages.add(ChatMessage(
-        text: '',
-        sender: MessageSender.bot,
-        demoOrder: order,
-        onDemoConfirmed: () => _confirmDemoOrder(index),
-      ));
+      _messages.add(ChatMessage(text: 'يجهّز قائمة ${place.name}...', sender: MessageSender.bot, isLoading: true));
+    });
+    _scrollToBottom();
+
+    try {
+      final catalog = await _catalogService.fetchCatalog(place.osmId);
+      if (catalog.isEmpty) {
+        setState(() {
+          _messages[index] = ChatMessage(
+            text: 'ما لقيت منتجات أو عروض متوفرة لـ ${place.name} حالياً 😕',
+            sender: MessageSender.bot,
+          );
+        });
+        return;
+      }
+
+      setState(() {
+        _messages[index] = ChatMessage(
+          text: 'هذي منتجات وعروض ${place.name}، اختر اللي يعجبك:',
+          sender: MessageSender.bot,
+          requestFlow: RequestFlow(catalog: catalog),
+          onSelectCatalogItem: (type, id, label, detail) => _selectCatalogItem(index, type, id, label, detail),
+          onConfirmRequest: (name, phone) => _confirmRequest(index, name, phone),
+          onCancelCatalogSelection: () => _cancelCatalogSelection(index),
+        );
+      });
+    } on CatalogException catch (e) {
+      setState(() => _messages[index] = ChatMessage(text: e.message, sender: MessageSender.bot));
+    } catch (_) {
+      setState(() => _messages[index] = ChatMessage(text: 'تعذر جلب المنتجات والعروض حالياً 😕', sender: MessageSender.bot));
+    } finally {
+      _scrollToBottom();
+    }
+  }
+
+  void _selectCatalogItem(int index, String itemType, String itemId, String label, String? detail) {
+    if (index >= _messages.length) return;
+    final current = _messages[index];
+    final flow = current.requestFlow;
+    if (flow == null) return;
+    setState(() {
+      _messages[index] = current.copyWith(
+        requestFlow: flow.copyWith(
+          stage: RequestFlowStage.confirming,
+          selectedItemType: itemType,
+          selectedItemId: itemId,
+          selectedItemLabel: label,
+          selectedItemDetail: detail,
+          clearError: true,
+        ),
+      );
     });
     _scrollToBottom();
   }
 
-  void _confirmDemoOrder(int index) {
+  void _cancelCatalogSelection(int index) {
     if (index >= _messages.length) return;
     final current = _messages[index];
-    if (current.demoOrder == null) return;
+    final flow = current.requestFlow;
+    if (flow == null) return;
     setState(() {
       _messages[index] = current.copyWith(
-        demoOrder: current.demoOrder!.copyWith(stage: DemoOrderStage.tracking),
+        requestFlow: flow.copyWith(stage: RequestFlowStage.browsing, clearSelection: true, clearError: true),
       );
     });
-    _scrollToBottom();
+  }
+
+  Future<void> _confirmRequest(int index, String name, String phone) async {
+    if (index >= _messages.length) return;
+    final current = _messages[index];
+    final flow = current.requestFlow;
+    if (flow == null || flow.selectedItemType == null || flow.selectedItemId == null) return;
+
+    setState(() {
+      _messages[index] = current.copyWith(
+        requestFlow: flow.copyWith(stage: RequestFlowStage.submitting, customerName: name, customerPhone: phone),
+      );
+    });
+
+    try {
+      await _requestService.submitRequest(
+        businessId: flow.catalog.businessId,
+        customerName: name,
+        customerPhone: phone,
+        itemType: flow.selectedItemType!,
+        itemId: flow.selectedItemId!,
+      );
+      setState(() {
+        final latest = _messages[index];
+        _messages[index] = latest.copyWith(
+          requestFlow: latest.requestFlow!.copyWith(stage: RequestFlowStage.submitted),
+        );
+      });
+    } on RequestException catch (e) {
+      setState(() {
+        final latest = _messages[index];
+        _messages[index] = latest.copyWith(
+          requestFlow: latest.requestFlow!.copyWith(stage: RequestFlowStage.confirming, errorMessage: e.message),
+        );
+      });
+    } catch (_) {
+      setState(() {
+        final latest = _messages[index];
+        _messages[index] = latest.copyWith(
+          requestFlow: latest.requestFlow!.copyWith(
+            stage: RequestFlowStage.confirming,
+            errorMessage: 'ما قدرت أرسل طلبك حالياً، حاول مرة ثانية.',
+          ),
+        );
+      });
+    } finally {
+      _scrollToBottom();
+    }
   }
 
   @override

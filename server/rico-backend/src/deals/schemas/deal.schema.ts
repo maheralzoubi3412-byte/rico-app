@@ -69,11 +69,12 @@ export class Deal {
   @Prop({ type: Date, default: null })
   verifiedAt: Date | null;
 
-  // Was `businessId` ref BusinessAccount — renamed to avoid colliding with
-  // the new `businessId` (ref Business, the location) above. Set only for
-  // source='business_dashboard' deals; lets a claim suspension cascade to
-  // hide exactly this account's deals (see BusinessClaim).
-  @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'BusinessAccount', default: null })
+  // Was `businessId` ref BusinessAccount, then BusinessAccount->Account —
+  // renamed to avoid colliding with the new `businessId` (ref Business, the
+  // location) above. Set only for source='business_dashboard' deals; lets a
+  // claim suspension cascade to hide exactly this account's deals (see
+  // BusinessClaim).
+  @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'Account', default: null })
   ownerAccountId: Types.ObjectId | null;
 }
 

@@ -18,7 +18,7 @@ class LocationService {
     final serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
       throw LocationException(
-        'خدمة الموقع غير مفعّلة على جهازك. فعّلها من الإعدادات ثم حاول مجدداً.',
+        'خدمة الموقع مو مفعّلة بجهازك. فعّلها من الإعدادات وحاول مرة ثانية.',
         type: LocationErrorType.serviceDisabled,
       );
     }
@@ -28,7 +28,7 @@ class LocationService {
       permission = await Geolocator.requestPermission();
       if (permission == LocationPermission.denied) {
         throw LocationException(
-          'أحتاج إذن الوصول لموقعك لأقترح عليك أقرب الأماكن 📍',
+          'أحتاج إذنك عشان أوصل لموقعك وأقترح عليك أقرب الأماكن 📍',
           type: LocationErrorType.permissionDenied,
         );
       }
@@ -36,7 +36,7 @@ class LocationService {
 
     if (permission == LocationPermission.deniedForever) {
       throw LocationException(
-        'تم رفض إذن الموقع بشكل دائم. فعّله من إعدادات التطبيق حتى أقدر أساعدك.',
+        'رفضت إذن الموقع بشكل دائم. فعّله من إعدادات التطبيق عشان أقدر أساعدك.',
         type: LocationErrorType.permissionDeniedForever,
       );
     }

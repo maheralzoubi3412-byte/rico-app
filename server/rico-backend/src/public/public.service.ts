@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Business, BusinessDocument } from '../businesses/schemas/business.schema';
+import { Product, ProductDocument } from '../products/schemas/product.schema';
 import { VendorImpression, VendorImpressionDocument } from './schemas/vendor-impression.schema';
 import { SearchGap, SearchGapDocument } from './schemas/search-gap.schema';
 import { DealsService } from '../deals/deals.service';
@@ -13,10 +14,47 @@ import { TrackSearchGapDto } from './dto/track-search-gap.dto';
 export class PublicService {
   constructor(
     @InjectModel(Business.name) private readonly businessModel: Model<BusinessDocument>,
+    @InjectModel(Product.name) private readonly productModel: Model<ProductDocument>,
     @InjectModel(VendorImpression.name) private readonly impressionModel: Model<VendorImpressionDocument>,
     @InjectModel(SearchGap.name) private readonly searchGapModel: Model<SearchGapDocument>,
     private readonly dealsService: DealsService,
   ) {}
+
+  // Backs the chat "browse this business's products/deals" flow — a
+  // consolidated read so the client doesn't have to compose product +
+  // discount + deal calls itself. finalPrice already reflects any active
+  // discount (kept in sync by PriceCalcService), so raw Discount records
+  // aren't needed here.
+  async getCatalog(businessId: string) {
+    const business = await this.businessModel.findById(businessId).lean();
+    if (!business) throw new NotFoundException({ error: 'business_not_found' });
+
+    const [products, deals] = await Promise.all([
+      this.productModel.find({ businessId, isActive: true }).lean(),
+      this.dealsService.findActiveForBusiness(businessId, new Date()),
+    ]);
+
+    return {
+      businessId: String(business._id),
+      businessName: business.nameAr || business.name,
+      products: products.map((p) => ({
+        id: p._id,
+        name: p.name,
+        category: p.category,
+        price: p.price,
+        finalPrice: p.finalPrice,
+      })),
+      deals: deals.map((d: any) => ({
+        id: d._id,
+        titleAr: d.titleAr,
+        descriptionAr: d.descriptionAr,
+        dealType: d.dealType,
+        value: d.value,
+        currency: d.currency,
+        promoCode: d.promoCode,
+      })),
+    };
+  }
 
   async searchPlaces(q: string) {
     const escaped = q.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

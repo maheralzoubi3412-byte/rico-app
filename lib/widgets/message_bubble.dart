@@ -1,13 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
-import '../demo/demo_order.dart';
-import '../demo/demo_order_card.dart';
-import '../demo/demo_tracking_card.dart';
 import '../models/chat_message.dart';
 import '../models/deal.dart';
 import '../models/place_result.dart';
 import '../services/intent_service.dart';
 import '../theme/app_theme.dart';
+import 'catalog_flow_card.dart';
 import 'chat_pill_chip.dart';
 import 'recommended_pick_card.dart';
 import 'understanding_card.dart';
@@ -22,9 +20,9 @@ class MessageBubble extends StatelessWidget {
   Widget build(BuildContext context) {
     final isUser = message.sender == MessageSender.user;
 
-    // بطاقات "فهمت طلبك" وبطاقات الطلب/التتبّع التجريبية تُعرض بمفردها بدل
-    // فقاعة الدردشة المعتادة (مطابقةً لتصميم RICO GO حيث تظهر كبطاقة مستقلة).
-    final skipBubble = (message.isLoading && message.understandingIntent != null) || message.isDemo;
+    // بطاقة "فهمت طلبك" تُعرض بمفردها بدل فقاعة الدردشة المعتادة (مطابقةً
+    // لتصميم RICO GO حيث تظهر كبطاقة مستقلة).
+    final skipBubble = message.isLoading && message.understandingIntent != null;
 
     return Align(
       alignment: isUser ? Alignment.centerLeft : Alignment.centerRight,
@@ -103,13 +101,13 @@ class MessageBubble extends StatelessWidget {
                   children: [for (final deal in message.deals!) _CompactDealCard(deal: deal)],
                 ),
               ),
-            if (message.demoOrder != null)
-              message.demoOrder!.stage == DemoOrderStage.reviewing
-                  ? DemoOrderCard(
-                      order: message.demoOrder!,
-                      onConfirmed: message.onDemoConfirmed ?? () {},
-                    )
-                  : DemoTrackingCard(order: message.demoOrder!),
+            if (message.requestFlow != null)
+              CatalogFlowCard(
+                flow: message.requestFlow!,
+                onSelectItem: message.onSelectCatalogItem,
+                onConfirm: message.onConfirmRequest,
+                onCancel: message.onCancelCatalogSelection,
+              ),
           ],
         ),
       ),
@@ -143,11 +141,23 @@ class _PlacesResults extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (resolvedIntent != null && resolvedOnOrder != null)
+          // بطاقة "ترشيح ريكو" وزر تصفّح المنتجات/العروض لا تظهر إلا لنشاط
+          // حقيقي من قاعدتنا (source == 'rico') — نتيجة OSM الاحتياطية لا
+          // يقابلها نشاط تجاري فعلي بمنتجات حقيقية لعرضها.
+          if (resolvedIntent != null && resolvedOnOrder != null && first.source == 'rico')
             RecommendedPickCard(place: first, intent: resolvedIntent, onOrder: () => resolvedOnOrder(first))
           else
-            _CompactPlaceCard(place: first, rank: 1),
-          for (var i = 0; i < rest.length; i++) _CompactPlaceCard(place: rest[i], rank: i + 2),
+            _CompactPlaceCard(
+              place: first,
+              rank: 1,
+              onViewCatalog: first.source == 'rico' && resolvedOnOrder != null ? () => resolvedOnOrder(first) : null,
+            ),
+          for (var i = 0; i < rest.length; i++)
+            _CompactPlaceCard(
+              place: rest[i],
+              rank: i + 2,
+              onViewCatalog: rest[i].source == 'rico' && resolvedOnOrder != null ? () => resolvedOnOrder(rest[i]) : null,
+            ),
           if (resolvedOnQuickReply != null) ...[
             const SizedBox(height: 10),
             Wrap(
@@ -170,8 +180,9 @@ class _PlacesResults extends StatelessWidget {
 class _CompactPlaceCard extends StatelessWidget {
   final PlaceResult place;
   final int rank;
+  final VoidCallback? onViewCatalog;
 
-  const _CompactPlaceCard({required this.place, required this.rank});
+  const _CompactPlaceCard({required this.place, required this.rank, this.onViewCatalog});
 
   Future<void> _openDirections() async {
     final uri = Uri.parse(place.directionsUrl);
@@ -193,40 +204,59 @@ class _CompactPlaceCard extends StatelessWidget {
       child: InkWell(
         onTap: _openDirections,
         borderRadius: BorderRadius.circular(14),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            CircleAvatar(
-              radius: 14,
-              backgroundColor: ChatColors.accent.withValues(alpha: 0.16),
-              child: Text('$rank',
-                  style: const TextStyle(color: ChatColors.accentBright, fontWeight: FontWeight.bold, fontSize: 12)),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(place.name,
-                      textAlign: TextAlign.right,
-                      style: const TextStyle(color: ChatColors.textPrimary, fontWeight: FontWeight.bold, fontSize: 13.5)),
-                  const SizedBox(height: 4),
-                  Wrap(
-                    alignment: WrapAlignment.end,
-                    spacing: 8,
-                    runSpacing: 4,
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                CircleAvatar(
+                  radius: 14,
+                  backgroundColor: ChatColors.accent.withValues(alpha: 0.16),
+                  child: Text('$rank',
+                      style: const TextStyle(color: ChatColors.accentBright, fontWeight: FontWeight.bold, fontSize: 12)),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      if (place.ratingLabel != null)
-                        Text(place.ratingLabel!, style: const TextStyle(color: ChatColors.gold, fontSize: 11.5)),
-                      if (place.priceLevelLabel != null)
-                        Text(place.priceLevelLabel!, style: const TextStyle(color: ChatColors.textMuted, fontSize: 11.5)),
-                      if (place.distanceMeters != null)
-                        Text(place.distanceLabel, style: const TextStyle(color: ChatColors.textMuted, fontSize: 11.5)),
+                      Text(place.name,
+                          textAlign: TextAlign.right,
+                          style: const TextStyle(
+                              color: ChatColors.textPrimary, fontWeight: FontWeight.bold, fontSize: 13.5)),
+                      const SizedBox(height: 4),
+                      Wrap(
+                        alignment: WrapAlignment.end,
+                        spacing: 8,
+                        runSpacing: 4,
+                        children: [
+                          if (place.ratingLabel != null)
+                            Text(place.ratingLabel!, style: const TextStyle(color: ChatColors.gold, fontSize: 11.5)),
+                          if (place.priceLevelLabel != null)
+                            Text(place.priceLevelLabel!,
+                                style: const TextStyle(color: ChatColors.textMuted, fontSize: 11.5)),
+                          if (place.distanceMeters != null)
+                            Text(place.distanceLabel, style: const TextStyle(color: ChatColors.textMuted, fontSize: 11.5)),
+                        ],
+                      ),
                     ],
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
+            if (onViewCatalog != null) ...[
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton(
+                  onPressed: onViewCatalog,
+                  style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 4)),
+                  child: const Text('عرض المنتجات والعروض',
+                      style: TextStyle(color: ChatColors.accentBright, fontSize: 12, fontWeight: FontWeight.bold)),
+                ),
+              ),
+            ],
           ],
         ),
       ),

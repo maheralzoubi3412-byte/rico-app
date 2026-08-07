@@ -32,11 +32,11 @@ class DealsService {
     try {
       response = await http.get(uri).timeout(const Duration(seconds: 6));
     } catch (_) {
-      throw DealsException('تعذر الاتصال بخدمة العروض حالياً، حاول مرة أخرى.');
+      throw DealsException('ما قدرت أتصل بخدمة العروض حالياً، حاول مرة ثانية.');
     }
 
     if (response.statusCode != 200) {
-      throw DealsException('تعذر جلب العروض حالياً (رمز ${response.statusCode}).');
+      throw DealsException('ما قدرت أجيب العروض حالياً (رمز ${response.statusCode}).');
     }
 
     try {
@@ -46,7 +46,7 @@ class DealsService {
           .map((d) => Deal.fromJson(d as Map<String, dynamic>))
           .toList();
     } catch (_) {
-      throw DealsException('تعذر قراءة بيانات العروض حالياً.');
+      throw DealsException('ما قدرت أقرأ بيانات العروض حالياً.');
     }
   }
 }

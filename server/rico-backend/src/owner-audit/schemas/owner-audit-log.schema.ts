@@ -5,7 +5,7 @@ export type OwnerAuditLogDocument = HydratedDocument<OwnerAuditLog>;
 
 @Schema({ timestamps: { createdAt: true, updatedAt: false } })
 export class OwnerAuditLog {
-  @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'OwnerAccount', required: true })
+  @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'Account', required: true })
   ownerId: Types.ObjectId;
 
   // Denormalized so the log stays readable even if the account is later

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { PublicService } from './public.service';
 import { SearchPlacesDto } from './dto/search-places.dto';
 import { SubmitDealDto } from './dto/submit-deal.dto';
@@ -12,6 +12,11 @@ export class PublicController {
   @Get('places/search')
   searchPlaces(@Query() query: SearchPlacesDto) {
     return this.publicService.searchPlaces(query.q);
+  }
+
+  @Get('places/:id/catalog')
+  getCatalog(@Param('id') id: string) {
+    return this.publicService.getCatalog(id);
   }
 
   @Post('submit-deal')

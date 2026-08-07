@@ -2,13 +2,15 @@ import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@ne
 import { DiscountsService } from './discounts.service';
 import { CreateDiscountDto } from './dto/create-discount.dto';
 import { UpdateDiscountDto } from './dto/update-discount.dto';
-import { AdminGuard } from '../common/guards/admin.guard';
+import { SessionGuard } from '../common/guards/session.guard';
+import { RequireApp } from '../common/decorators/require-app.decorator';
 
 @Controller('discounts')
 export class DiscountsController {
   constructor(private readonly discountsService: DiscountsService) {}
 
-  @UseGuards(AdminGuard)
+  @UseGuards(SessionGuard)
+  @RequireApp('owner')
   @Post()
   create(@Body() dto: CreateDiscountDto) {
     return this.discountsService.create(dto);
@@ -24,13 +26,15 @@ export class DiscountsController {
     return this.discountsService.findOne(id);
   }
 
-  @UseGuards(AdminGuard)
+  @UseGuards(SessionGuard)
+  @RequireApp('owner')
   @Patch(':id')
   update(@Param('id') id: string, @Body() dto: UpdateDiscountDto) {
     return this.discountsService.update(id, dto);
   }
 
-  @UseGuards(AdminGuard)
+  @UseGuards(SessionGuard)
+  @RequireApp('owner')
   @Patch(':id/expire')
   expire(@Param('id') id: string) {
     return this.discountsService.expire(id);

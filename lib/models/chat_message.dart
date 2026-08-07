@@ -1,8 +1,8 @@
 import 'package:flutter/foundation.dart';
-import '../demo/demo_order.dart';
 import '../services/intent_service.dart';
 import 'deal.dart';
 import 'place_result.dart';
+import 'request_flow.dart';
 
 enum MessageSender { user, bot }
 
@@ -21,9 +21,10 @@ class ChatMessage {
   /// الفعلية تُستخدم لاشتقاق سبب الترشيح الحقيقي في RecommendedPickCard.
   final QueryIntent? understandingIntent;
 
-  /// يُستدعى عند الضغط على "اطلبه" في بطاقة الترشيح — يبدأ عرض الطلب
-  /// التجريبي الدائم (لا يوجد نظام طلبات حقيقي). null إن لم تكن هذه رسالة
-  /// نتائج أماكن قابلة للطلب.
+  /// يُستدعى عند الضغط على "اطلبه"/"عرض المنتجات والعروض" في نتيجة نشاط
+  /// حقيقي من قاعدة ريكو (source == 'rico') — يبدأ تصفّح منتجاته وعروضه
+  /// الفعلية عبر [requestFlow]. null لنتائج OSM الاحتياطية (لا يقابلها نشاط
+  /// حقيقي بمنتجات فعلية).
   final void Function(PlaceResult place)? onOrder;
 
   /// يُستدعى عند الضغط على حبة اقتراح سريع (مثل "أبغى أرخص") أسفل نتائج
@@ -31,14 +32,20 @@ class ChatMessage {
   /// وهمية على النتائج المعروضة.
   final void Function(String suggestion)? onQuickReply;
 
-  /// طلب تجريبي دائم (مراحل التأكيد والدفع والتتبّع) — لا يمثّل عملية حقيقية.
-  /// يجب ألا تدخل الرسائل التي تحمل هذا الحقل في `_buildHistory()` أو ذاكرة
-  /// الجلسة، حتى لا تُفسد تصنيف الطلبات الحقيقية اللاحقة.
-  final DemoOrder? demoOrder;
+  /// تدفّق تصفّح منتجات/عروض نشاط حقيقي واحد ثم تأكيد طلب تواصل حقيقي
+  /// (اهتمام بمنتج/عرض، يظهر لصاحب النشاط في لوحته) — بديل حقيقي لتدفّق
+  /// الطلب التجريبي القديم الذي كان لا يتصل بأي خادم.
+  final RequestFlow? requestFlow;
 
-  /// يُستدعى عند سحب SlideToConfirm في بطاقة الطلب التجريبية — ينقل
-  /// [demoOrder] من مرحلة المراجعة إلى مرحلة التتبّع.
-  final VoidCallback? onDemoConfirmed;
+  /// يُستدعى عند اختيار عنصر (منتج أو عرض) من [requestFlow] — ينقل الحالة
+  /// من تصفّح إلى تأكيد.
+  final void Function(String itemType, String itemId, String label, String? detail)? onSelectCatalogItem;
+
+  /// يُستدعى عند تأكيد الطلب باسم وهاتف العميل — يرسل الطلب الفعلي للخادم.
+  final void Function(String name, String phone)? onConfirmRequest;
+
+  /// يُستدعى عند الرجوع من مرحلة التأكيد إلى تصفّح القائمة من جديد.
+  final VoidCallback? onCancelCatalogSelection;
 
   ChatMessage({
     required this.text,
@@ -51,17 +58,17 @@ class ChatMessage {
     this.understandingIntent,
     this.onOrder,
     this.onQuickReply,
-    this.demoOrder,
-    this.onDemoConfirmed,
+    this.requestFlow,
+    this.onSelectCatalogItem,
+    this.onConfirmRequest,
+    this.onCancelCatalogSelection,
     DateTime? timestamp,
   }) : timestamp = timestamp ?? DateTime.now();
-
-  bool get isDemo => demoOrder != null;
 
   ChatMessage copyWith({
     String? text,
     bool? isLoading,
-    DemoOrder? demoOrder,
+    RequestFlow? requestFlow,
   }) {
     return ChatMessage(
       text: text ?? this.text,
@@ -74,8 +81,10 @@ class ChatMessage {
       understandingIntent: understandingIntent,
       onOrder: onOrder,
       onQuickReply: onQuickReply,
-      demoOrder: demoOrder ?? this.demoOrder,
-      onDemoConfirmed: onDemoConfirmed,
+      requestFlow: requestFlow ?? this.requestFlow,
+      onSelectCatalogItem: onSelectCatalogItem,
+      onConfirmRequest: onConfirmRequest,
+      onCancelCatalogSelection: onCancelCatalogSelection,
       timestamp: timestamp,
     );
   }

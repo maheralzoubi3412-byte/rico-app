@@ -11,10 +11,12 @@ import { PricingModule } from './pricing/pricing.module';
 import { DealsModule } from './deals/deals.module';
 import { SearchModule } from './search/search.module';
 import { ClassifyModule } from './classify/classify.module';
-import { BusinessAuthModule } from './business-auth/business-auth.module';
-import { AdminModule } from './admin/admin.module';
+import { AccountsModule } from './accounts/accounts.module';
+import { AuthModule } from './auth/auth.module';
+import { VendorModule } from './vendor/vendor.module';
 import { OwnerModule } from './owner/owner.module';
 import { PublicModule } from './public/public.module';
+import { RequestsModule } from './requests/requests.module';
 import { MailerModule } from './mailer/mailer.module';
 import { SpaModule } from './spa/spa.module';
 
@@ -32,15 +34,16 @@ import { SpaModule } from './spa/spa.module';
         '/search/products*',
         '/deals*',
         '/classify*',
-        '/places/search*',
+        '/places/*',
         '/submit-deal*',
         '/impressions*',
         '/search-gaps*',
         '/businesses*',
         '/products*',
         '/discounts*',
-        '/admin*',
-        '/business*',
+        '/requests*',
+        '/auth*',
+        '/vendor*',
         '/owner*',
       ],
     }),
@@ -52,10 +55,12 @@ import { SpaModule } from './spa/spa.module';
     SearchModule,
     ClassifyModule,
     MailerModule,
-    BusinessAuthModule,
-    AdminModule,
+    AccountsModule,
+    AuthModule,
+    VendorModule,
     OwnerModule,
     PublicModule,
+    RequestsModule,
     SpaModule,
   ],
   controllers: [AppController],

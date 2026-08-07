@@ -137,4 +137,22 @@ export class DealsService {
   async expireForAccountBusiness(ownerAccountId: string | Types.ObjectId, businessId: string | Types.ObjectId): Promise<void> {
     await this.dealModel.updateMany({ ownerAccountId, businessId, status: 'active' }, { $set: { status: 'expired' } });
   }
+
+  // Same active-window filter as findNearby (status + startsAt/endsAt +
+  // isActiveNow's day/time-of-day check), scoped to one business instead of
+  // a geo radius — backs the chat catalog view for a specific place.
+  async findActiveForBusiness(businessId: string, now: Date) {
+    const deals = await this.dealModel
+      .find({
+        businessId,
+        status: 'active',
+        $and: [
+          { $or: [{ startsAt: null }, { startsAt: { $lte: now } }] },
+          { $or: [{ endsAt: null }, { endsAt: { $gt: now } }] },
+        ],
+      })
+      .lean();
+
+    return deals.filter((d) => isActiveNow(d, now));
+  }
 }

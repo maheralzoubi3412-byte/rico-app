@@ -14,6 +14,11 @@ async function bootstrap() {
 
   const mongoUri = process.env.MONGODB_URI;
   const SESSION_MAX_AGE_MS = 365 * 24 * 60 * 60 * 1000; // 1 year
+
+  if (!process.env.SESSION_SECRET) {
+    console.warn('SESSION_SECRET is not set — using an insecure dev-only default. Set it before a real deploy.');
+  }
+
   app.use(
     session({
       secret: process.env.SESSION_SECRET || 'dev_only_insecure_secret_change_me',

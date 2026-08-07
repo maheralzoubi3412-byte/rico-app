@@ -61,11 +61,12 @@ class PlacesService {
     return buffer.toString();
   }
 
-  // rico-backend (NestJS، يستبدل rico-api القديم) يوفر ترتيباً حقيقياً
-  // (سعر/تقييم فعليين) لكن تغطيته محدودة حالياً بالمناطق التي زُوّدت ببيانات
-  // جوجل — Overpass يبقى المصدر الاحتياطي دوماً لأنه يغطي كل السعودية. لا
-  // معنى لطلب أرخص/أعلى تقييماً بعلامة تجارية محددة (brandHint) لأن /search
-  // لا يفلتر بالاسم بعد، فنتجاهله في هذه الحالة.
+  // rico-backend (NestJS، يستبدل rico-api القديم) نجرّبه أولاً لأي طلب مكان
+  // بفئة محددة (أقرب/أرخص/أعلى تقييماً) — نشاطاته حقيقية (source == 'rico')
+  // وتُظهر ترشيحاً ومنتجات/عروض فعلية في الدردشة. تغطيته محدودة حالياً
+  // بالمناطق المزوَّدة ببيانات — Overpass يبقى المصدر الاحتياطي دوماً لأنه
+  // يغطي كل السعودية. لا معنى لطلب بعلامة تجارية محددة (brandHint) من
+  // rico-api لأن /search لا يفلتر بالاسم بعد، فنتجاهله في هذه الحالة.
   // TODO: حدّث هذا الرابط بعد نشر rico-backend (Render). للتجربة المحلية:
   // http://localhost:3000 (iOS Simulator/سطح المكتب) أو http://10.0.2.2:3000 (Android Emulator).
   static const String _ricoApiBaseUrl = 'http://localhost:3000';
@@ -81,12 +82,16 @@ class PlacesService {
     String? categorySlug,
     int radiusMeters = 3000,
   }) async {
-    if ((cheapest || bestRated) && categorySlug != null && brandHint == null) {
+    // نجرّب rico-api أيضاً لطلب "الأقرب" العادي (بلا أرخص/أعلى تقييماً) —
+    // ليس فقط عند طلب ترتيب بسعر/تقييم حقيقيين. هذا يجعل نشاطاً حقيقياً من
+    // قاعدتنا (source == 'rico') قابلاً للظهور والترشيح حتى في أبسط استعلام
+    // "أقرب كافيه"، لا فقط عند تحديد "أرخص"/"أفضل تقييماً" صراحةً.
+    if (!openNow && categorySlug != null && brandHint == null) {
       final ranked = await _searchRicoApi(
         userLat: userLat,
         userLng: userLng,
         categorySlug: categorySlug,
-        rank: bestRated ? 'best_rated' : 'cheapest',
+        rank: bestRated ? 'best_rated' : (cheapest ? 'cheapest' : 'nearest'),
         radiusMeters: radiusMeters,
       );
       if (ranked != null) return ranked;
@@ -118,9 +123,12 @@ class PlacesService {
     return results;
   }
 
-  /// يحاول جلب ترتيب حقيقي (أرخص/أعلى تقييماً) من rico-api. يرجع null إذا
-  /// فشل الاتصال، أو لم تتوفر بيانات كافية للترتيب المطلوب فعلياً، أو لم توجد
-  /// نتائج — في كل هذه الحالات يسقط المستدعي إلى Overpass تلقائياً.
+  /// يحاول جلب نتائج من rico-api (نشاطات حقيقية من قاعدتنا). يرجع null إذا
+  /// فشل الاتصال، أو — لطلب أرخص/أعلى تقييماً تحديداً — لم تتوفر بيانات
+  /// سعر/تقييم كافية للترتيب المطلوب فعلياً، أو لم توجد نتائج — في كل هذه
+  /// الحالات يسقط المستدعي إلى Overpass تلقائياً. طلب "الأقرب" العادي لا
+  /// يحتاج هذا الشرط: المسافة الفعلية متوفرة دوماً من استعلام جغرافي بسيط،
+  /// فلا معنى لاشتراط بيانات سعر/تقييم لعرض نشاط حقيقي كأقرب نتيجة.
   Future<List<PlaceResult>?> _searchRicoApi({
     required double userLat,
     required double userLng,
@@ -141,10 +149,8 @@ class PlacesService {
       if (response.statusCode != 200) return null;
 
       final data = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
-      final dataAvailable = rank == 'cheapest'
-          ? data['priceDataAvailable'] == true
-          : data['ratingDataAvailable'] == true;
-      if (!dataAvailable) return null;
+      if (rank == 'cheapest' && data['priceDataAvailable'] != true) return null;
+      if (rank == 'best_rated' && data['ratingDataAvailable'] != true) return null;
 
       final places = (data['places'] as List?) ?? [];
       if (places.isEmpty) return null;
@@ -217,13 +223,13 @@ out center tags;
 
       if (response == null) {
         anyConnectionFailure = true;
-        lastError = PlacesException('تعذر الوصول لخدمة الأماكن حالياً، جاري تجربة خادم بديل...');
+        lastError = PlacesException('ما قدرت أوصل لخدمة الأماكن حالياً، أجرب خادم ثاني...');
         continue;
       }
 
       if (response.statusCode != 200) {
         lastError = PlacesException(
-            'تعذر الاتصال بخدمة الأماكن المجانية حالياً (رمز ${response.statusCode})');
+            'ما قدرت أتصل بخدمة الأماكن المجانية حالياً (رمز ${response.statusCode})');
         continue;
       }
 
@@ -262,7 +268,7 @@ out center tags;
 
         return results.take(8).toList();
       } catch (e) {
-        lastError = PlacesException('تعذر الوصول لخدمة الأماكن حالياً، جاري تجربة خادم بديل...');
+        lastError = PlacesException('ما قدرت أوصل لخدمة الأماكن حالياً، أجرب خادم ثاني...');
         continue;
       }
     }
@@ -270,9 +276,9 @@ out center tags;
     // إذا فشل الاتصال بكل المرايا (لا رد أصلاً)، الاحتمال الأكبر مشكلة شبكة
     // مؤقتة بالجهاز (خصوصاً بعد فترة خمول)، وليس تعطّل كل الخوادم الأربعة فعلاً
     if (anyConnectionFailure) {
-      throw PlacesException('تعذر الاتصال بالإنترنت، تحقق من اتصالك وحاول مرة أخرى.');
+      throw PlacesException('ما قدرت أتصل بالإنترنت، تأكد من اتصالك وحاول مرة ثانية.');
     }
 
-    throw lastError ?? PlacesException('تعذر الاتصال بخدمة الأماكن حالياً.');
+    throw lastError ?? PlacesException('ما قدرت أتصل بخدمة الأماكن حالياً.');
   }
 }

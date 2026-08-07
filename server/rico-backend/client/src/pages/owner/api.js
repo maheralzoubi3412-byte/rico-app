@@ -46,3 +46,5 @@ export const DEAL_TYPE_LABELS = {
   free_item: 'عنصر مجاني',
   bundle: 'عرض باقة',
 };
+
+export const DEAL_TYPES = Object.entries(DEAL_TYPE_LABELS).map(([value, label]) => ({ value, label }));

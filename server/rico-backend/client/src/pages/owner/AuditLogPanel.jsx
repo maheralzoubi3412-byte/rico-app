@@ -3,13 +3,15 @@ import { useState, useEffect } from 'react';
 const ACTION_LABELS = {
   'business.setActive': 'تفعيل/إيقاف نشاط',
   'claim.review': 'مراجعة طلب ربط',
+  'deal.review': 'مراجعة عرض',
   'staff.create': 'إضافة حساب',
   'staff.update': 'تعديل حساب',
+  'vendor.invite': 'دعوة صاحب نشاط',
 };
 
 function describeDetail(action, detail) {
   if (action === 'business.setActive') return detail.isActive ? 'تم التفعيل' : 'تم الإيقاف';
-  if (action === 'claim.review') return `الحالة: ${detail.status}`;
+  if (action === 'claim.review' || action === 'deal.review') return `الحالة: ${detail.status}`;
   if (action === 'staff.create') return `${detail.email} (${detail.role === 'owner' ? 'مالك' : 'موظف'})`;
   if (action === 'staff.update') {
     const parts = [];
@@ -17,6 +19,7 @@ function describeDetail(action, detail) {
     if (detail.isActive !== undefined) parts.push(detail.isActive ? 'تفعيل' : 'إيقاف');
     return parts.join(' · ');
   }
+  if (action === 'vendor.invite') return detail.email || '';
   return '';
 }
 

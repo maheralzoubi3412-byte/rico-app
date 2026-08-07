@@ -2,16 +2,22 @@ import { useState, useEffect, useCallback } from 'react';
 import { createAuthedFetch } from './owner/api';
 import BusinessesPanel from './owner/BusinessesPanel';
 import BusinessDetail from './owner/BusinessDetail';
+import ClaimsPanel from './owner/ClaimsPanel';
+import DealsQueuePanel from './owner/DealsQueuePanel';
 import AnalyticsPanel from './owner/AnalyticsPanel';
-import CustomersPanel from './owner/CustomersPanel';
-import CustomerDetail from './owner/CustomerDetail';
+import VendorsPanel from './owner/VendorsPanel';
+import VendorDetail from './owner/VendorDetail';
+import SourcingPanel from './owner/SourcingPanel';
 import StaffPanel from './owner/StaffPanel';
 import AuditLogPanel from './owner/AuditLogPanel';
 
 const BASE_TABS = [
   { id: 'businesses', label: 'الأنشطة التجارية' },
+  { id: 'claims', label: 'طلبات الربط' },
+  { id: 'dealsQueue', label: 'العروض قيد المراجعة' },
   { id: 'analytics', label: 'التحليلات' },
-  { id: 'customers', label: 'أصحاب الأنشطة' },
+  { id: 'vendors', label: 'أصحاب الأنشطة' },
+  { id: 'sourcing', label: 'إضافة بيانات' },
   { id: 'auditLog', label: 'سجل النشاطات' },
 ];
 const OWNER_ONLY_TAB = { id: 'staff', label: 'الفريق' };
@@ -33,9 +39,7 @@ function buildNavSearch(nav) {
 }
 
 export default function OwnerDashboard() {
-  const [me, setMe] = useState(null); // null = checking session, false = unauthenticated, {id,email,role} = logged in
-  const [loginForm, setLoginForm] = useState({ email: '', password: '' });
-  const [authError, setAuthError] = useState(null);
+  const [me, setMe] = useState(null); // null = checking session, false = unauthenticated, {id,email,platformRole} = logged in
   const [nav, setNav] = useState(() => parseNav(window.location.search));
 
   useEffect(() => {
@@ -54,7 +58,7 @@ export default function OwnerDashboard() {
 
   useEffect(() => {
     (async () => {
-      const res = await fetch('/owner/me');
+      const res = await fetch('/auth/me');
       if (res.status === 401) return setMe(false);
       setMe(await res.json());
     })();
@@ -71,25 +75,9 @@ export default function OwnerDashboard() {
   const selectAccount = (accountId) => pushNav({ ...nav, accountId, businessId: null }, false);
   const backToList = () => window.history.back();
 
-  async function handleLoginSubmit(e) {
-    e.preventDefault();
-    setAuthError(null);
-    const res = await fetch('/owner/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(loginForm),
-    });
-    if (!res.ok) {
-      setAuthError('البريد الإلكتروني أو كلمة المرور غير صحيحة.');
-      return;
-    }
-    setMe(await res.json());
-    setLoginForm({ email: '', password: '' });
-  }
-
   async function logout() {
-    await fetch('/owner/logout', { method: 'POST' });
-    setMe(false);
+    await fetch('/auth/logout', { method: 'POST' });
+    window.location.href = '/owner/login';
   }
 
   if (me === null) return <div className="page"><div className="card">جاري التحميل...</div></div>;
@@ -97,34 +85,18 @@ export default function OwnerDashboard() {
   if (me === false) {
     return (
       <div className="page">
-        <div className="card">
-          <h1>لوحة تحكم المالك</h1>
-          <form onSubmit={handleLoginSubmit}>
-            <label htmlFor="ownerEmail">البريد الإلكتروني</label>
-            <input
-              id="ownerEmail"
-              type="email"
-              required
-              value={loginForm.email}
-              onChange={(e) => setLoginForm({ ...loginForm, email: e.target.value })}
-            />
-            <label htmlFor="ownerPassword">كلمة المرور</label>
-            <input
-              id="ownerPassword"
-              type="password"
-              required
-              value={loginForm.password}
-              onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })}
-            />
-            <button className="full" type="submit">دخول</button>
-          </form>
-          {authError && <div className="status error">{authError}</div>}
+        <div className="card" style={{ textAlign: 'center' }}>
+          <h1>يجب تسجيل الدخول</h1>
+          <p className="subtitle">انتهت الجلسة أو لم تسجّل الدخول بعد.</p>
+          <a href="/owner/login">
+            <button className="full" type="button">تسجيل الدخول</button>
+          </a>
         </div>
       </div>
     );
   }
 
-  const tabs = me.role === 'owner' ? [...BASE_TABS, OWNER_ONLY_TAB] : BASE_TABS;
+  const tabs = me.platformRole === 'owner' ? [...BASE_TABS, OWNER_ONLY_TAB] : BASE_TABS;
 
   return (
     <div className="owner-layout">
@@ -140,7 +112,7 @@ export default function OwnerDashboard() {
           </button>
         ))}
         <p style={{ padding: '0 20px', fontSize: 12.5, color: '#888', marginTop: 'auto' }}>
-          {me.email} · {me.role === 'owner' ? 'مالك' : 'موظف'}
+          {me.email} · {me.platformRole === 'owner' ? 'مالك' : 'موظف'}
         </p>
         <button className="owner-nav-item logout" onClick={logout}>تسجيل الخروج</button>
       </aside>
@@ -152,15 +124,18 @@ export default function OwnerDashboard() {
         {nav.tab === 'businesses' && nav.businessId && (
           <BusinessDetail authedFetch={authedFetch} businessId={nav.businessId} onBack={backToList} />
         )}
+        {nav.tab === 'claims' && <ClaimsPanel authedFetch={authedFetch} />}
+        {nav.tab === 'dealsQueue' && <DealsQueuePanel authedFetch={authedFetch} />}
         {nav.tab === 'analytics' && <AnalyticsPanel authedFetch={authedFetch} />}
-        {nav.tab === 'customers' && !nav.accountId && (
-          <CustomersPanel authedFetch={authedFetch} onSelect={selectAccount} />
+        {nav.tab === 'vendors' && !nav.accountId && (
+          <VendorsPanel authedFetch={authedFetch} onSelect={selectAccount} />
         )}
-        {nav.tab === 'customers' && nav.accountId && (
-          <CustomerDetail authedFetch={authedFetch} accountId={nav.accountId} onBack={backToList} />
+        {nav.tab === 'vendors' && nav.accountId && (
+          <VendorDetail authedFetch={authedFetch} accountId={nav.accountId} onBack={backToList} />
         )}
+        {nav.tab === 'sourcing' && <SourcingPanel authedFetch={authedFetch} />}
         {nav.tab === 'auditLog' && <AuditLogPanel authedFetch={authedFetch} />}
-        {nav.tab === 'staff' && me.role === 'owner' && <StaffPanel authedFetch={authedFetch} currentOwnerId={me.id} />}
+        {nav.tab === 'staff' && me.platformRole === 'owner' && <StaffPanel authedFetch={authedFetch} currentOwnerId={me.id} />}
       </main>
     </div>
   );

@@ -10,29 +10,33 @@ const CLIENT_DIST = join(__dirname, '..', '..', 'client', 'dist');
 // as the old Express app's SPA_PAGES loop.
 @Controller()
 export class SpaController {
-  // Landing page linking to all the frontend sections below.
-  @Get('dashboard')
-  dashboard(@Res() res: Response) {
-    res.sendFile(join(CLIENT_DIST, 'index.html'));
-  }
-
   @Get('submit-deal')
   submitDeal(@Res() res: Response) {
     res.sendFile(join(CLIENT_DIST, 'index.html'));
   }
 
-  @Get('business/login')
-  businessLogin(@Res() res: Response) {
+  @Get('vendor/login')
+  vendorLogin(@Res() res: Response) {
     res.sendFile(join(CLIENT_DIST, 'index.html'));
   }
 
-  @Get('business/dashboard')
-  businessDashboard(@Res() res: Response) {
+  @Get('vendor/set-password')
+  vendorSetPassword(@Res() res: Response) {
     res.sendFile(join(CLIENT_DIST, 'index.html'));
   }
 
-  @Get('admin/dashboard')
-  adminDashboard(@Res() res: Response) {
+  @Get('vendor/dashboard')
+  vendorDashboard(@Res() res: Response) {
+    res.sendFile(join(CLIENT_DIST, 'index.html'));
+  }
+
+  @Get('owner/login')
+  ownerLogin(@Res() res: Response) {
+    res.sendFile(join(CLIENT_DIST, 'index.html'));
+  }
+
+  @Get('owner/set-password')
+  ownerSetPassword(@Res() res: Response) {
     res.sendFile(join(CLIENT_DIST, 'index.html'));
   }
 

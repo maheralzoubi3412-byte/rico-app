@@ -5,6 +5,7 @@ import { PublicService } from './public.service';
 import { PublicController } from './public.controller';
 import { BusinessesModule } from '../businesses/businesses.module';
 import { DealsModule } from '../deals/deals.module';
+import { ProductsModule } from '../products/products.module';
 import { VendorImpression, VendorImpressionSchema } from './schemas/vendor-impression.schema';
 import { SearchGap, SearchGapSchema } from './schemas/search-gap.schema';
 import { submitDealLimiter, impressionLimiter } from '../common/middleware/rate-limiters';
@@ -13,6 +14,7 @@ import { submitDealLimiter, impressionLimiter } from '../common/middleware/rate-
   imports: [
     BusinessesModule,
     DealsModule,
+    ProductsModule,
     MongooseModule.forFeature([
       { name: VendorImpression.name, schema: VendorImpressionSchema },
       { name: SearchGap.name, schema: SearchGapSchema },

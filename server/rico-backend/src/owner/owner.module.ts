@@ -1,16 +1,36 @@
-import { MiddlewareConsumer, Module, NestModule, RequestMethod } from '@nestjs/common';
+import { Module } from '@nestjs/common';
+import { MongooseModule } from '@nestjs/mongoose';
+import { ApiUsage, ApiUsageSchema } from './schemas/api-usage.schema';
+import { SyncLog, SyncLogSchema } from './schemas/sync-log.schema';
+import { BusinessClaim, BusinessClaimSchema } from '../vendor/schemas/business-claim.schema';
+import { OwnerService } from './owner.service';
 import { OwnerController } from './owner.controller';
-import { OwnerAuthModule } from '../owner-auth/owner-auth.module';
+import { AccountsModule } from '../accounts/accounts.module';
 import { OwnerAuditModule } from '../owner-audit/owner-audit.module';
-import { AdminModule } from '../admin/admin.module';
-import { loginIpLimiter, loginEmailLimiter } from '../common/middleware/rate-limiters';
+import { BusinessesModule } from '../businesses/businesses.module';
+import { DealsModule } from '../deals/deals.module';
+import { ProductsModule } from '../products/products.module';
+import { DiscountsModule } from '../discounts/discounts.module';
+import { PublicModule } from '../public/public.module';
+import { MailerModule } from '../mailer/mailer.module';
 
 @Module({
-  imports: [OwnerAuthModule, OwnerAuditModule, AdminModule],
+  imports: [
+    MongooseModule.forFeature([
+      { name: ApiUsage.name, schema: ApiUsageSchema },
+      { name: SyncLog.name, schema: SyncLogSchema },
+      { name: BusinessClaim.name, schema: BusinessClaimSchema },
+    ]),
+    AccountsModule,
+    OwnerAuditModule,
+    BusinessesModule,
+    DealsModule,
+    ProductsModule,
+    DiscountsModule,
+    PublicModule,
+    MailerModule,
+  ],
   controllers: [OwnerController],
+  providers: [OwnerService],
 })
-export class OwnerModule implements NestModule {
-  configure(consumer: MiddlewareConsumer) {
-    consumer.apply(loginIpLimiter, loginEmailLimiter).forRoutes({ path: 'owner/login', method: RequestMethod.POST });
-  }
-}
+export class OwnerModule {}

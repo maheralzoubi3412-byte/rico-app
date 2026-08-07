@@ -1,11 +1,14 @@
 import { useState, useEffect, useCallback } from 'react';
-import { CATEGORY_LABELS, DEAL_STATUS_LABELS } from './api';
+import { CATEGORY_LABELS, CLAIM_STATUS_LABELS, DEAL_STATUS_LABELS } from './api';
 import ImpressionsChart from './ImpressionsChart';
 import HeatmapChart from './HeatmapChart';
 
 export default function BusinessDetail({ authedFetch, businessId, onBack }) {
   const [data, setData] = useState(null); // null = loading
   const [impressions, setImpressions] = useState(null); // null = loading
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteStatus, setInviteStatus] = useState(null);
+  const [inviting, setInviting] = useState(false);
 
   const load = useCallback(async () => {
     const res = await authedFetch(`/owner/businesses/${businessId}`);
@@ -37,9 +40,32 @@ export default function BusinessDetail({ authedFetch, businessId, onBack }) {
     load();
   }
 
+  async function inviteVendor(e) {
+    e.preventDefault();
+    setInviting(true);
+    setInviteStatus(null);
+    const res = await authedFetch('/owner/vendors/invite', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: inviteEmail, businessId }),
+    });
+    setInviting(false);
+    if (res && res.ok) {
+      setInviteStatus({ type: 'success', message: 'تم إرسال الدعوة — الحساب مُفعّل مباشرة لهذا النشاط.' });
+      setInviteEmail('');
+      load();
+    } else {
+      const body = res ? await res.json().catch(() => ({})) : {};
+      setInviteStatus({
+        type: 'error',
+        message: body.error === 'email_already_exists' ? 'هذا البريد مستخدم بالفعل لحساب آخر.' : 'تعذر إرسال الدعوة.',
+      });
+    }
+  }
+
   if (!data) return <div className="owner-wide-card"><p className="note">جاري التحميل...</p></div>;
 
-  const { business, products, deals } = data;
+  const { business, products, deals, claims } = data;
 
   return (
     <div>
@@ -60,6 +86,31 @@ export default function BusinessDetail({ authedFetch, businessId, onBack }) {
         <p style={{ fontSize: 13.5, color: '#666' }}>
           {business.phone ? `هاتف: ${business.phone}` : 'لا يوجد رقم هاتف مسجّل'}
         </p>
+      </div>
+
+      <div className="owner-wide-card">
+        <h1 style={{ fontSize: 17 }}>حسابات أصحاب النشاط ({claims.length})</h1>
+        {claims.length === 0 && <p className="note">لا يوجد حساب مرتبط بهذا النشاط بعد.</p>}
+        {claims.map((c) => (
+          <div key={c.id} className="row" style={{ marginTop: 10 }}>
+            <span>{c.accountEmail || '—'}</span>
+            <span className={`badge ${c.status}`}>{CLAIM_STATUS_LABELS[c.status] || c.status}</span>
+          </div>
+        ))}
+
+        <form onSubmit={inviteVendor} style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid #EEE' }}>
+          <label htmlFor="inviteEmail">دعوة صاحب نشاط جديد (بريد إلكتروني)</label>
+          <input
+            id="inviteEmail"
+            type="email"
+            required
+            value={inviteEmail}
+            onChange={(e) => setInviteEmail(e.target.value)}
+            placeholder="vendor@example.com"
+          />
+          <button className="full" type="submit" disabled={inviting}>إرسال دعوة</button>
+          {inviteStatus && <div className={`status ${inviteStatus.type}`}>{inviteStatus.message}</div>}
+        </form>
       </div>
 
       <div className="owner-wide-card">
