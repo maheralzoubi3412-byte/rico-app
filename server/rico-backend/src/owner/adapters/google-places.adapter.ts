@@ -14,6 +14,7 @@ export const GOOGLE_TYPE_BY_CATEGORY: Record<string, string[]> = {
   hospital: ['hospital'],
   clinic: ['doctor'],
   fitness_centre: ['gym'],
+  hotel: ['lodging'],
 };
 
 const FIELD_MASK = 'places.id,places.displayName,places.location,places.priceLevel,places.rating,places.userRatingCount';

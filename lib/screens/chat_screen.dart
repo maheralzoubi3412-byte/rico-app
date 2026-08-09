@@ -2,9 +2,11 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import '../models/chat_message.dart';
+import '../models/deal.dart';
 import '../models/place_result.dart';
 import '../models/request_flow.dart';
 import '../services/catalog_service.dart';
+import '../services/compose_service.dart';
 import '../services/deals_service.dart';
 import '../services/impression_service.dart';
 import '../services/intent_service.dart';
@@ -48,11 +50,26 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void initState() {
     super.initState();
-    _messages.add(ChatMessage(
-      text:
-          'هلا وسهلا 👋 أنا ريكو، مساعدك الذكي في السعودية.\nاسألني مثلاً: "أقرب مطعم" أو "أرخص كافيه قريب" وبقترح لك أفضل الخيارات حسب موقعك.',
-      sender: MessageSender.bot,
-    ));
+    _restoreConversation();
+  }
+
+  /// يستعيد آخر محادثة محفوظة محلياً (إن وُجدت ولم تنقض صلاحيتها) بدل بدء
+  /// محادثة جديدة كل مرة — وإلا يعرض رسالة الترحيب المعتادة.
+  Future<void> _restoreConversation() async {
+    final restored = await _sessionMemory.loadTranscript();
+    if (!mounted) return;
+    setState(() {
+      if (restored.isEmpty) {
+        _messages.add(ChatMessage(
+          text:
+              'هلا وسهلا 👋 أنا ريكو، مساعدك الذكي في السعودية.\nاسألني مثلاً: "أقرب مطعم" أو "أرخص كافيه قريب" وبقترح لك أفضل الخيارات حسب موقعك.',
+          sender: MessageSender.bot,
+        ));
+      } else {
+        _messages.addAll(restored);
+      }
+    });
+    _scrollToBottom();
   }
 
   Future<Position> _getPosition() async {
@@ -78,19 +95,50 @@ class _ChatScreenState extends State<ChatScreen> {
     return (lat: position.latitude, lng: position.longitude, offerSaveHome: false);
   }
 
+  /// الرسائل القابلة للحفظ/الإرسال كسياق: نصية فقط، غير قيد التحميل، وبلا
+  /// تدفّق طلب مرتبط (لا معنى لاستعادة أزرار/حالات تفاعلية من محادثة سابقة).
+  List<ChatMessage> get _persistableMessages =>
+      _messages.where((m) => !m.isLoading && m.text.isNotEmpty && m.requestFlow == null).toList();
+
   /// يبني آخر رسائل المحادثة كسياق للتصنيف عبر LLM، لدعم الاستكمالات مثل
   /// "بس أبعد شوي" بدل معاملة كل رسالة بمعزل عمّا سبقها.
   List<Map<String, String>> _buildHistory() {
-    final relevant = _messages
-        .where((m) => !m.isLoading && m.text.isNotEmpty && m.requestFlow == null)
-        .toList();
-    final recent = relevant.length > 6 ? relevant.sublist(relevant.length - 6) : relevant;
+    final relevant = _persistableMessages;
+    final recent = relevant.length > 10 ? relevant.sublist(relevant.length - 10) : relevant;
     return recent
         .map((m) => {
               'role': m.sender == MessageSender.user ? 'user' : 'assistant',
               'content': m.text,
             })
         .toList();
+  }
+
+  /// يبحث عن آخر رسالة عرضت نتائج فعلية (أماكن أو عروض) بترتيبها المعروض
+  /// للمستخدم، لدعم إشارات مثل "الثاني" أو "مثله بس أرخص". يُحسب من ترتيب
+  /// [_messages] نفسه (ثابت وقت إنشاء الفقاعات) لا من ترتيب اكتمال الجلب
+  /// الشبكي (متزامن وغير محدّد الترتيب عند تعدد النوايا في رسالة واحدة).
+  ({String label, List<PlaceResult>? places, List<Deal>? deals})? _findLastShown() {
+    for (var i = _messages.length - 1; i >= 0; i--) {
+      final m = _messages[i];
+      if (m.places != null && m.places!.isNotEmpty) {
+        return (label: m.understandingIntent?.label ?? '', places: m.places, deals: null);
+      }
+      if (m.deals != null && m.deals!.isNotEmpty) {
+        return (label: 'العروض', places: null, deals: m.deals);
+      }
+    }
+    return null;
+  }
+
+  /// يبني نسخة مختصرة (رقم + اسم فقط) من آخر نتائج معروضة لإرسالها مع طلب
+  /// التصنيف عبر LLM — يكفي المصنّف لحل إشارات ترتيبية دون كشف بيانات كاملة.
+  Map<String, dynamic>? _buildLastResultsPayload() {
+    final last = _findLastShown();
+    if (last == null) return null;
+    final items = last.places != null
+        ? [for (var j = 0; j < last.places!.length; j++) {'position': j + 1, 'name': last.places![j].name}]
+        : [for (var j = 0; j < last.deals!.length; j++) {'position': j + 1, 'name': last.deals![j].placeName}];
+    return {'label': last.label, 'items': items};
   }
 
   void _scrollToBottom() {
@@ -105,9 +153,61 @@ class _ChatScreenState extends State<ChatScreen> {
     });
   }
 
+  /// يحل إشارة لعنصر محدد من آخر نتائج معروضة (مثل "الثاني") من الذاكرة
+  /// المحلية مباشرة — بدون بحث شبكي جديد، فيحافظ على بيانات النتيجة الأصلية
+  /// (السعر/التقييم/المصدر) كما هي بدل المجازفة بإعادة بحث بالاسم قد يُرجع
+  /// نسخة مختلفة (مصدرها OSM لا ريكو) لنفس المكان. يرجع null إذا لم يعد
+  /// الترتيب المطلوب موجوداً (تغيّرت القائمة)، فيعامل الطلب كبحث عادي.
+  Future<ChatMessage?> _resolveReferencedMessage(String text, QueryIntent intent, int position) async {
+    final last = _findLastShown();
+    final lastPlaces = last?.places;
+    final lastDeals = last?.deals;
+    final place = (lastPlaces != null && position <= lastPlaces.length) ? lastPlaces[position - 1] : null;
+    final deal = (lastDeals != null && position <= lastDeals.length) ? lastDeals[position - 1] : null;
+    if (place == null && deal == null) return null;
+
+    final composedReply = await ComposeService.composeReply(
+      message: text,
+      intentKind: place != null ? 'place' : 'deals',
+      intentLabel: intent.label,
+      rank: 'nearest',
+      items: place != null
+          ? [
+              {
+                'name': place.name,
+                if (place.distanceMeters != null) 'distanceMeters': place.distanceMeters,
+                if (place.priceLevel != null) 'priceLevel': place.priceLevel,
+                if (place.rating != null) 'rating': place.rating,
+                if (place.ratingCount != null) 'ratingCount': place.ratingCount,
+                if (place.isOpenNow != null) 'openNow': place.isOpenNow,
+              }
+            ]
+          : [
+              {
+                'name': deal!.placeName,
+                'dealLabel': deal.typeLabel,
+                if (deal.distanceMeters != null) 'distanceMeters': deal.distanceMeters,
+              }
+            ],
+      truncated: false,
+      history: _buildHistory(),
+    );
+
+    return ChatMessage(
+      text: composedReply ?? 'هذا تفاصيل ${intent.label} رقم $position:',
+      sender: MessageSender.bot,
+      places: place != null ? [place] : null,
+      deals: deal != null ? [deal] : null,
+      understandingIntent: intent,
+      onOrder: place != null ? _openCatalog : null,
+      onQuickReply: _sendQuickReply,
+    );
+  }
+
   /// يحل نية واحدة (مكان أو عروض) إلى رسالة رد جاهزة، مع عزل الأخطاء داخل
   /// النية نفسها (فشل نية واحدة من عدة نوايا في نفس الرسالة لا يوقف البقية).
   Future<ChatMessage> _resolveIntentMessage(
+    String text,
     QueryIntent intent,
     ({double lat, double lng, bool offerSaveHome}) origin,
     bool usedFallback,
@@ -121,8 +221,23 @@ class _ChatScreenState extends State<ChatScreen> {
         unawaited(_impressionService.trackItems(
           deals.map((d) => ImpressionItem(businessId: d.placeId, dealId: d.id)).toList(),
         ));
+        final composedReply = await ComposeService.composeReply(
+          message: text,
+          intentKind: 'deals',
+          intentLabel: intent.label,
+          rank: 'nearest',
+          items: deals
+              .map((d) => {
+                    'name': d.placeName,
+                    'dealLabel': d.typeLabel,
+                    if (d.distanceMeters != null) 'distanceMeters': d.distanceMeters,
+                  })
+              .toList(),
+          truncated: false,
+          history: _buildHistory(),
+        );
         return ChatMessage(
-          text: 'هذي أقرب العروض المتوفرة:',
+          text: composedReply ?? 'هذي أقرب العروض المتوفرة:',
           sender: MessageSender.bot,
           deals: deals,
         );
@@ -165,26 +280,57 @@ class _ChatScreenState extends State<ChatScreen> {
         unawaited(_impressionService.track(ricoPlaceIds));
       }
 
+      final rankStr = switch (intent.rank) {
+        RankMode.cheapest => 'cheapest',
+        RankMode.openNow => 'open_now',
+        RankMode.bestRated => 'best_rated',
+        RankMode.nearest => 'nearest',
+      };
+
+      final composedReply = await ComposeService.composeReply(
+        message: text,
+        intentKind: 'place',
+        intentLabel: intent.label,
+        rank: rankStr,
+        items: places
+            .take(5)
+            .map((p) => {
+                  'name': p.name,
+                  if (p.distanceMeters != null) 'distanceMeters': p.distanceMeters,
+                  if (p.priceLevel != null) 'priceLevel': p.priceLevel,
+                  if (p.rating != null) 'rating': p.rating,
+                  if (p.ratingCount != null) 'ratingCount': p.ratingCount,
+                  if (p.isOpenNow != null) 'openNow': p.isOpenNow,
+                })
+            .toList(),
+        truncated: places.length > 5,
+        history: _buildHistory(),
+      );
+
       // نميّز بين ترتيب حقيقي فعلاً (وصل من rico-api ومعه بيانات سعر/تقييم)
       // وبين رجوع Overpass الاحتياطي (بلا هذه البيانات) — حتى لا نوهم
       // المستخدم بترتيب حقيقي غير موجود فعلياً.
-      var introText = 'هذي أقرب ${intent.label} لموقعك:';
+      var introText = composedReply;
 
-      if (intent.wantsCheapest) {
-        introText = places.first.priceLevel != null
-            ? 'رتبت لك ${intent.label} من الأرخص للأغلى فعلياً حسب الأسعار:'
-            : 'رتبت لك أقرب ${intent.label} (الأقرب غالباً أوفر بسبب توفير وقت ومشوار):';
-      } else if (intent.rank == RankMode.bestRated) {
-        introText = places.first.rating != null
-            ? 'رتبت لك ${intent.label} من الأعلى تقييماً:'
-            : 'هذي أقرب ${intent.label} لموقعك (ما توفرت بيانات تقييم كافية بعد):';
-      }
+      if (introText == null) {
+        introText = 'هذي أقرب ${intent.label} لموقعك:';
 
-      if (intent.wantsOpenNow) {
-        final anyConfirmedOpen = places.any((p) => p.isOpenNow == true);
-        introText = anyConfirmedOpen
-            ? 'هذي أقرب ${intent.label} المفتوحة الآن:'
-            : 'ما قدرت أتأكد من مواعيد الدوام بدقة، بس هذي أقرب ${intent.label}:';
+        if (intent.wantsCheapest) {
+          introText = places.first.priceLevel != null
+              ? 'رتبت لك ${intent.label} من الأرخص للأغلى فعلياً حسب الأسعار:'
+              : 'رتبت لك أقرب ${intent.label} (الأقرب غالباً أوفر بسبب توفير وقت ومشوار):';
+        } else if (intent.rank == RankMode.bestRated) {
+          introText = places.first.rating != null
+              ? 'رتبت لك ${intent.label} من الأعلى تقييماً:'
+              : 'هذي أقرب ${intent.label} لموقعك (ما توفرت بيانات تقييم كافية بعد):';
+        }
+
+        if (intent.wantsOpenNow) {
+          final anyConfirmedOpen = places.any((p) => p.isOpenNow == true);
+          introText = anyConfirmedOpen
+              ? 'هذي أقرب ${intent.label} المفتوحة الآن:'
+              : 'ما قدرت أتأكد من مواعيد الدوام بدقة، بس هذي أقرب ${intent.label}:';
+        }
       }
 
       if (usedFallback) {
@@ -222,7 +368,11 @@ class _ChatScreenState extends State<ChatScreen> {
     _scrollToBottom();
 
     try {
-      final classification = await LlmIntentService.classify(text, history: _buildHistory());
+      final classification = await LlmIntentService.classify(
+        text,
+        history: _buildHistory(),
+        lastResults: _buildLastResultsPayload(),
+      );
 
       if (classification != null && classification.isOffTopic) {
         setState(() {
@@ -271,8 +421,17 @@ class _ChatScreenState extends State<ChatScreen> {
       final futures = <Future<void>>[];
       for (var i = 0; i < intents.length; i++) {
         final index = startIndex + i;
+        final referencedPosition = intents[i].referencedPosition;
+        // إشارة لعنصر محدد من آخر نتائج (مثل "الثاني") تُحل من الذاكرة
+        // المحلية أولاً بدون بحث شبكي جديد؛ إن لم تعد قابلة للحل (تغيّرت
+        // القائمة) نسقط تلقائياً لمسار البحث العادي.
+        final resolveFuture = referencedPosition != null
+            ? _resolveReferencedMessage(text, intents[i], referencedPosition).then((message) async {
+                return message ?? await _resolveIntentMessage(text, intents[i], origin, usedFallback);
+              })
+            : _resolveIntentMessage(text, intents[i], origin, usedFallback);
         futures.add(
-          _resolveIntentMessage(intents[i], origin, usedFallback).then((message) {
+          resolveFuture.then((message) {
             if (!mounted) return;
             setState(() => _messages[index] = message);
             _scrollToBottom();
@@ -337,6 +496,7 @@ class _ChatScreenState extends State<ChatScreen> {
     } finally {
       setState(() => _sending = false);
       _scrollToBottom();
+      unawaited(_sessionMemory.saveTranscript(_persistableMessages));
     }
   }
 
@@ -555,6 +715,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   _quickChip('أقرب مطعم'),
                   _quickChip('أرخص كافيه'),
                   _quickChip('أقرب صيدلية'),
+                  _quickChip('أقرب فندق'),
                   _quickChip('أقرب محطة بنزين'),
                   _quickChip('العروض القريبة'),
                 ],

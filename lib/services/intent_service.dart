@@ -22,6 +22,11 @@ class QueryIntent {
   final String? brandHint;
   final String? slug; // null لنوايا deals وللفئات الحرة (other) غير الثابتة
 
+  /// رقم ترتيب عنصر من "آخر نتائج معروضة" أشار له المستخدم صراحة (مثل
+  /// "الثاني")، أو null لطلب بحث عادي. عند تحديده يُحل من الذاكرة المحلية
+  /// (بدون بحث شبكي جديد) في شاشة الدردشة.
+  final int? referencedPosition;
+
   QueryIntent({
     this.kind = IntentKind.place,
     this.tags = const [],
@@ -29,6 +34,7 @@ class QueryIntent {
     this.rank = RankMode.nearest,
     this.brandHint,
     this.slug,
+    this.referencedPosition,
   });
 
   bool get wantsCheapest => rank == RankMode.cheapest;
@@ -109,6 +115,12 @@ class IntentService {
       'tags': [const OsmTag('leisure', 'fitness_centre'), const OsmTag('leisure', 'sports_centre')],
       'label': 'نادي رياضي',
       'words': 'جيم|نادي رياضي|صالة رياضية',
+    },
+    {
+      'slug': 'hotel',
+      'tags': [const OsmTag('tourism', 'hotel'), const OsmTag('tourism', 'apartment')],
+      'label': 'فندق',
+      'words': 'فندق|فنادق|شقة مفروشة|شقق مفروشة|إقامة|استراحة',
     },
   ];
 
@@ -206,6 +218,7 @@ class IntentService {
     String slug, {
     RankMode rank = RankMode.nearest,
     String? brandHint,
+    int? referencedPosition,
   }) {
     for (final category in _categories) {
       if (category['slug'] == slug) {
@@ -215,6 +228,7 @@ class IntentService {
           rank: rank,
           brandHint: brandHint,
           slug: slug,
+          referencedPosition: referencedPosition,
         );
       }
     }

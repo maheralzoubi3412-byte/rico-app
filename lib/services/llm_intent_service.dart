@@ -12,6 +12,7 @@ class ResolvedIntent {
   final String? customTagKey;
   final String? customTagValue;
   final String? label;
+  final int? referencedPosition;
 
   ResolvedIntent({
     required this.kind,
@@ -21,11 +22,12 @@ class ResolvedIntent {
     this.customTagKey,
     this.customTagValue,
     this.label,
+    this.referencedPosition,
   });
 
   QueryIntent? toQueryIntent() {
     if (kind == 'deals') {
-      return QueryIntent(kind: IntentKind.deals, label: label ?? 'العروض');
+      return QueryIntent(kind: IntentKind.deals, label: label ?? 'العروض', referencedPosition: referencedPosition);
     }
 
     final rankMode = _rankFromString(rank);
@@ -37,10 +39,21 @@ class ResolvedIntent {
         label: label!,
         rank: rankMode,
         brandHint: brandHint,
+        // نفس قيمة وسم OSM (مثل "hairdresser") تُستخدم كـcategorySlug عند
+        // البحث في قاعدة ريكو أولاً — تماماً كما تفعل الفئات الثابتة
+        // (restaurant/cafe/hotel...) — قبل السقوط لـOverpass إذا لم يوجد
+        // نشاط مسجّل بهذه الفئة بعد.
+        slug: customTagValue,
+        referencedPosition: referencedPosition,
       );
     }
     if (category == null) return null;
-    return IntentService.byCategorySlug(category!, rank: rankMode, brandHint: brandHint);
+    return IntentService.byCategorySlug(
+      category!,
+      rank: rankMode,
+      brandHint: brandHint,
+      referencedPosition: referencedPosition,
+    );
   }
 
   static RankMode _rankFromString(String value) {
@@ -88,6 +101,7 @@ class LlmIntentService {
   static Future<LlmClassification?> classify(
     String message, {
     List<Map<String, String>>? history,
+    Map<String, dynamic>? lastResults,
   }) async {
     try {
       final response = await http
@@ -97,6 +111,7 @@ class LlmIntentService {
             body: jsonEncode({
               'message': message,
               if (history != null && history.isNotEmpty) 'history': history,
+              if (lastResults != null) 'lastResults': lastResults,
             }),
           )
           .timeout(const Duration(seconds: 6));
@@ -123,6 +138,7 @@ class LlmIntentService {
           customTagKey: customTag?['key'] as String?,
           customTagValue: customTag?['value'] as String?,
           label: map['label'] as String?,
+          referencedPosition: map['referencedPosition'] as int?,
         );
       }).toList();
 

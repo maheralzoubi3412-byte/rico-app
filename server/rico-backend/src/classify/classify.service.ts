@@ -1,6 +1,6 @@
 import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import { CATEGORIES, MAX_INTENTS, OTHER_TAG_KEYS, RANKS, SYSTEM_PROMPT } from './constants/classify.constants';
-import { ClassifyRequestDto } from './dto/classify-request.dto';
+import { ClassifyRequestDto, LastResultsDto } from './dto/classify-request.dto';
 
 interface Intent {
   kind: 'place' | 'deals';
@@ -9,6 +9,27 @@ interface Intent {
   brandHint: string | null;
   customTag: { key: string; value: string } | null;
   label: string | null;
+  referencedPosition: number | null;
+}
+
+// Strips characters that could break out of the plain-text block we
+// interpolate into the system prompt — item names are third-party-controlled
+// (OSM/business data), not something we authored.
+function sanitizeForPrompt(s: string): string {
+  return s.replace(/[\r\n\t]+/g, ' ').slice(0, 120);
+}
+
+function buildLastResultsBlock(lastResults: LastResultsDto): string {
+  const label = sanitizeForPrompt(lastResults.label);
+  const lines = lastResults.items.map((i) => `${i.position}. ${sanitizeForPrompt(i.name)}`).join('\n');
+  return `\n\nآخر نتائج عُرضت على المستخدم (الفئة: ${label}):\n${lines}\nإذا أشار المستخدم لأحد هذه العناصر بالترتيب (الأول/الثاني/...)، ضع رقم الترتيب في referencedPosition واجعل brandHint=null. إذا طلب شيئاً "شبيه/مثله" بدون رقم محدد، استخدم فئة هذه القائمة (${label}) دون تحديد referencedPosition أو brandHint.`;
+}
+
+// Clamps to a valid 1-10 position, or null if absent/out of range — same
+// "drop, don't reject" philosophy as the rest of this function.
+function parseReferencedPosition(raw: any): number | null {
+  const n = raw?.referencedPosition;
+  return typeof n === 'number' && Number.isInteger(n) && n >= 1 && n <= 10 ? n : null;
 }
 
 // Validates one intent element, or returns null if it's unsalvageable — an
@@ -25,6 +46,7 @@ function validateIntent(raw: any): Intent | null {
       brandHint: null,
       customTag: null,
       label: rawLabel && rawLabel.length <= 40 ? rawLabel : 'العروض',
+      referencedPosition: parseReferencedPosition(raw),
     };
   }
 
@@ -52,14 +74,19 @@ function validateIntent(raw: any): Intent | null {
   }
 
   const brandHintRaw = typeof raw.brandHint === 'string' ? raw.brandHint.trim() : '';
+  const referencedPosition = parseReferencedPosition(raw);
 
   return {
     kind: 'place',
     category,
     rank,
-    brandHint: brandHintRaw && brandHintRaw.length <= 60 ? brandHintRaw : null,
+    // referencedPosition and brandHint are mutually exclusive by design (see
+    // SYSTEM_PROMPT's "الإشارة لنتيجة سابقة" section) — enforce it here too
+    // rather than trusting the model never mixes them.
+    brandHint: referencedPosition === null && brandHintRaw && brandHintRaw.length <= 60 ? brandHintRaw : null,
     customTag,
     label,
+    referencedPosition,
   };
 }
 
@@ -71,6 +98,12 @@ export class ClassifyService {
       throw new HttpException({ error: 'server_misconfigured' }, HttpStatus.INTERNAL_SERVER_ERROR);
     }
 
+    // A second mid-conversation system-role message isn't something
+    // Llama-family chat templates are trained on (system is reserved for
+    // position 0), so "last shown results" context is appended to the one
+    // system turn instead of injected as its own message.
+    const systemContent = dto.lastResults ? `${SYSTEM_PROMPT}${buildLastResultsBlock(dto.lastResults)}` : SYSTEM_PROMPT;
+
     let groqResponse: Response;
     try {
       groqResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
@@ -81,9 +114,14 @@ export class ClassifyService {
         },
         body: JSON.stringify({
           model: process.env.GROQ_MODEL || 'llama-3.3-70b-versatile',
-          messages: [{ role: 'system', content: SYSTEM_PROMPT }, ...(dto.history || []), { role: 'user', content: dto.message }],
+          messages: [{ role: 'system', content: systemContent }, ...(dto.history || []), { role: 'user', content: dto.message }],
           response_format: { type: 'json_object' },
-          temperature: 0,
+          // Was 0 (fully deterministic) — bumped slightly so the `reply`
+          // field (small talk/off-topic text) doesn't sound robotically
+          // identical every time. category/rank/kind are small enums, so a
+          // modest bump is unlikely to destabilize them, but this is a
+          // judgment call worth re-checking if classification quality drops.
+          temperature: 0.2,
           max_tokens: 350,
         }),
       });

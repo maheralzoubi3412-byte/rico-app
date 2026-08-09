@@ -11,6 +11,7 @@ import { PricingModule } from './pricing/pricing.module';
 import { DealsModule } from './deals/deals.module';
 import { SearchModule } from './search/search.module';
 import { ClassifyModule } from './classify/classify.module';
+import { ComposeModule } from './compose/compose.module';
 import { AccountsModule } from './accounts/accounts.module';
 import { AuthModule } from './auth/auth.module';
 import { VendorModule } from './vendor/vendor.module';
@@ -34,6 +35,7 @@ import { SpaModule } from './spa/spa.module';
         '/search/products*',
         '/deals*',
         '/classify*',
+        '/compose*',
         '/places/*',
         '/submit-deal*',
         '/impressions*',
@@ -54,6 +56,7 @@ import { SpaModule } from './spa/spa.module';
     DealsModule,
     SearchModule,
     ClassifyModule,
+    ComposeModule,
     MailerModule,
     AccountsModule,
     AuthModule,

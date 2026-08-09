@@ -12,6 +12,7 @@ const CATEGORY_SLUGS = [
   'hospital',
   'clinic',
   'fitness_centre',
+  'hotel',
 ] as const;
 
 export { CATEGORY_SLUGS };
