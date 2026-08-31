@@ -165,9 +165,9 @@ class _PlacesResults extends StatelessWidget {
               spacing: 8,
               runSpacing: 8,
               children: [
-                ChatPillChip(label: 'أبغى أرخص', onTap: () => resolvedOnQuickReply('أبغى أرخص')),
-                ChatPillChip(label: 'أبغى أسرع', onTap: () => resolvedOnQuickReply('أبغى الأقرب')),
-                ChatPillChip(label: 'ورّني خيارات ثانية', onTap: () => resolvedOnQuickReply('ورّني خيارات ثانية')),
+                ChatPillChip(label: 'بدي أرخص', onTap: () => resolvedOnQuickReply('بدي أرخص')),
+                ChatPillChip(label: 'بدي أسرع', onTap: () => resolvedOnQuickReply('بدي الأقرب')),
+                ChatPillChip(label: 'ورّني خيارات تانية', onTap: () => resolvedOnQuickReply('ورّني خيارات تانية')),
               ],
             ),
           ],

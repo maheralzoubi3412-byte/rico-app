@@ -12,7 +12,7 @@ class RicoApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Rico GO',
+      title: 'Rico JO',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(),
       home: const ChatScreen(),

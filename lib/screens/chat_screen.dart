@@ -61,13 +61,13 @@ class _ChatScreenState extends State<ChatScreen> {
     setState(() {
       if (restored.isEmpty) {
         _messages.add(ChatMessage(
-          text: 'هلا والله 👋\n'
-              'تقدر تسألني عن:\n'
+          text: 'أهلين 👋\n'
+              'فيك تسألني عن:\n'
               '🍔 مطاعم قريبة\n'
               '☕ كافيهات\n'
               '🛍️ محلات\n'
               '🔥 عروض وخصومات\n'
-              'أو قل لي وش بخاطرك وبضبطه لك 👌',
+              'أو قلي شو ببالك وأرتبها لك 👌',
           sender: MessageSender.bot,
         ));
       } else {
@@ -199,7 +199,7 @@ class _ChatScreenState extends State<ChatScreen> {
     );
 
     return ChatMessage(
-      text: composedReply ?? 'هذا تفاصيل ${intent.label} رقم $position:',
+      text: composedReply ?? 'هاد تفاصيل ${intent.label} رقم $position:',
       sender: MessageSender.bot,
       places: place != null ? [place] : null,
       deals: deal != null ? [deal] : null,
@@ -221,7 +221,7 @@ class _ChatScreenState extends State<ChatScreen> {
       try {
         final deals = await _dealsService.fetchNearby(lat: origin.lat, lng: origin.lng);
         if (deals.isEmpty) {
-          return ChatMessage(text: 'ما لقيت عروض قريبة منك حالياً 😕', sender: MessageSender.bot);
+          return ChatMessage(text: 'ما لقيت عروض قريبة منك هلأ 😕', sender: MessageSender.bot);
         }
         unawaited(_impressionService.trackItems(
           deals.map((d) => ImpressionItem(businessId: d.placeId, dealId: d.id)).toList(),
@@ -242,14 +242,14 @@ class _ChatScreenState extends State<ChatScreen> {
           history: _buildHistory(),
         );
         return ChatMessage(
-          text: composedReply ?? 'هذي أقرب العروض المتوفرة:',
+          text: composedReply ?? 'هاي أقرب العروض الموجودة:',
           sender: MessageSender.bot,
           deals: deals,
         );
       } on DealsException catch (e) {
         return ChatMessage(text: e.message, sender: MessageSender.bot);
       } catch (_) {
-        return ChatMessage(text: 'ما قدرت أجيب العروض حالياً 😕', sender: MessageSender.bot);
+        return ChatMessage(text: 'ما قدرت أجيب العروض هلأ 😕', sender: MessageSender.bot);
       }
     }
 
@@ -272,7 +272,7 @@ class _ChatScreenState extends State<ChatScreen> {
           unawaited(_searchGapService.track(categorySlug: intent.slug!, lat: origin.lat, lng: origin.lng));
         }
         return ChatMessage(
-          text: 'ما لقيت ${intent.label} قريب منك حالياً 😕 جرّب توسّع نطاق البحث أو نوع ثاني.',
+          text: 'ما لقيت ${intent.label} قريب منك هلأ 😕 جرّب توسّع نطاق البحث أو نوع تاني.',
           sender: MessageSender.bot,
         );
       }
@@ -318,28 +318,28 @@ class _ChatScreenState extends State<ChatScreen> {
       var introText = composedReply;
 
       if (introText == null) {
-        introText = 'هذي أقرب ${intent.label} لموقعك:';
+        introText = 'هاي أقرب ${intent.label} لموقعك:';
 
         if (intent.wantsCheapest) {
           introText = places.first.priceLevel != null
-              ? 'رتبت لك ${intent.label} من الأرخص للأغلى فعلياً حسب الأسعار:'
-              : 'رتبت لك أقرب ${intent.label} (الأقرب غالباً أوفر بسبب توفير وقت ومشوار):';
+              ? 'رتبتلك ${intent.label} من الأرخص للأغلى فعلياً حسب الأسعار:'
+              : 'رتبتلك أقرب ${intent.label} (الأقرب غالباً أوفر بسبب توفير وقت ومشوار):';
         } else if (intent.rank == RankMode.bestRated) {
           introText = places.first.rating != null
-              ? 'رتبت لك ${intent.label} من الأعلى تقييماً:'
-              : 'هذي أقرب ${intent.label} لموقعك (ما توفرت بيانات تقييم كافية بعد):';
+              ? 'رتبتلك ${intent.label} من الأعلى تقييم:'
+              : 'هاي أقرب ${intent.label} لموقعك (ما في بيانات تقييم كافية لسا):';
         }
 
         if (intent.wantsOpenNow) {
           final anyConfirmedOpen = places.any((p) => p.isOpenNow == true);
           introText = anyConfirmedOpen
-              ? 'هذي أقرب ${intent.label} المفتوحة الآن:'
-              : 'ما قدرت أتأكد من مواعيد الدوام بدقة، بس هذي أقرب ${intent.label}:';
+              ? 'هاي أقرب ${intent.label} الفاتحة هلأ:'
+              : 'ما قدرت أتأكد من مواعيد الدوام بالظبط، بس هاي أقرب ${intent.label}:';
         }
       }
 
       if (usedFallback) {
-        introText += '\n(ما قدرت أتأكد من نوع طلبك بدقة، صحح لي إذا ما كان قصدك 🙂)';
+        introText += '\n(ما قدرت أتأكد من نوع طلبك بالظبط، صحّحلي إذا ما كان هاد قصدك 🙂)';
       }
 
       return ChatMessage(
@@ -353,7 +353,7 @@ class _ChatScreenState extends State<ChatScreen> {
     } on PlacesException catch (e) {
       return ChatMessage(text: e.message, sender: MessageSender.bot);
     } catch (_) {
-      return ChatMessage(text: 'حدث خطأ غير متوقع، حاول مرة أخرى 😕', sender: MessageSender.bot);
+      return ChatMessage(text: 'صار خطأ مو متوقع، حاول مرة كمان 😕', sender: MessageSender.bot);
     }
   }
 
@@ -364,7 +364,7 @@ class _ChatScreenState extends State<ChatScreen> {
     setState(() {
       _messages.add(ChatMessage(text: text, sender: MessageSender.user));
       _messages.add(ChatMessage(
-          text: 'يبحث لك ريكو الآن...',
+          text: 'ريكو عم يدوّرلك هلأ...',
           sender: MessageSender.bot,
           isLoading: true));
       _sending = true;
@@ -384,7 +384,7 @@ class _ChatScreenState extends State<ChatScreen> {
           _messages.removeLast(); // إزالة رسالة "يبحث..."
           _messages.add(ChatMessage(
             text: classification.reply ??
-                'أنا ريكو، متخصص بمساعدتك تلقى أقرب مطعم أو كافيه أو صيدلية وغيرها 😊 جرّب تسألني مثلاً "أقرب مطعم".',
+                'أنا ريكو، مختص أساعدك تلاقي أقرب مطعم أو كافيه أو صيدلية وغيرها 😊 جرّب اسألني متل "أقرب مطعم".',
             sender: MessageSender.bot,
           ));
         });
@@ -408,8 +408,8 @@ class _ChatScreenState extends State<ChatScreen> {
         for (final intent in intents)
           ChatMessage(
             text: intent.kind == IntentKind.deals
-                ? 'يشوف العروض القريبة...'
-                : 'يبحث عن ${intent.label}...',
+                ? 'عم يشوف العروض القريبة...'
+                : 'عم يدوّر على ${intent.label}...',
             sender: MessageSender.bot,
             isLoading: true,
             understandingIntent: intent,
@@ -455,7 +455,7 @@ class _ChatScreenState extends State<ChatScreen> {
       if (origin.offerSaveHome && mounted) {
         setState(() {
           _messages.add(ChatMessage(
-            text: 'تبي أحفظ موقعك الحالي كـ"بيتي" عشان أستخدمه في طلباتك الجاية؟',
+            text: 'بدك أحفظ موقعك الحالي كـ"بيتي" عشان أستخدمه بطلباتك الجاية؟',
             sender: MessageSender.bot,
             actionLabel: 'احفظ موقعي كبيتي',
             onAction: () async {
@@ -463,7 +463,7 @@ class _ChatScreenState extends State<ChatScreen> {
               if (!mounted) return;
               setState(() {
                 _messages.add(ChatMessage(
-                  text: 'تم ✅ حفظت موقعك كـ"بيتي".',
+                  text: 'تمام ✅ حفظت موقعك كـ"بيتي".',
                   sender: MessageSender.bot,
                 ));
               });
@@ -494,7 +494,7 @@ class _ChatScreenState extends State<ChatScreen> {
       setState(() {
         _messages.removeLast();
         _messages.add(ChatMessage(
-          text: 'صار خطأ ما توقعته، حاول مرة ثانية 😕',
+          text: 'صار خطأ ما كنت متوقعه، حاول مرة كمان 😕',
           sender: MessageSender.bot,
         ));
       });
@@ -534,7 +534,7 @@ class _ChatScreenState extends State<ChatScreen> {
   Future<void> _openCatalog(PlaceResult place) async {
     final index = _messages.length;
     setState(() {
-      _messages.add(ChatMessage(text: 'يجهّز قائمة ${place.name}...', sender: MessageSender.bot, isLoading: true));
+      _messages.add(ChatMessage(text: 'عم يجهّز قائمة ${place.name}...', sender: MessageSender.bot, isLoading: true));
     });
     _scrollToBottom();
 
@@ -543,7 +543,7 @@ class _ChatScreenState extends State<ChatScreen> {
       if (catalog.isEmpty) {
         setState(() {
           _messages[index] = ChatMessage(
-            text: 'ما لقيت منتجات أو عروض متوفرة لـ ${place.name} حالياً 😕',
+            text: 'ما لقيت منتجات أو عروض موجودة لـ ${place.name} هلأ 😕',
             sender: MessageSender.bot,
           );
         });
@@ -552,7 +552,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
       setState(() {
         _messages[index] = ChatMessage(
-          text: 'هذي منتجات وعروض ${place.name}، اختر اللي يعجبك:',
+          text: 'هاي منتجات وعروض ${place.name}، اختار يلي بيعجبك:',
           sender: MessageSender.bot,
           requestFlow: RequestFlow(catalog: catalog),
           onSelectCatalogItem: (type, id, label, detail) => _selectCatalogItem(index, type, id, label, detail),
@@ -563,7 +563,7 @@ class _ChatScreenState extends State<ChatScreen> {
     } on CatalogException catch (e) {
       setState(() => _messages[index] = ChatMessage(text: e.message, sender: MessageSender.bot));
     } catch (_) {
-      setState(() => _messages[index] = ChatMessage(text: 'تعذر جلب المنتجات والعروض حالياً 😕', sender: MessageSender.bot));
+      setState(() => _messages[index] = ChatMessage(text: 'ما قدرت أجيب المنتجات والعروض هلأ 😕', sender: MessageSender.bot));
     } finally {
       _scrollToBottom();
     }
@@ -640,7 +640,7 @@ class _ChatScreenState extends State<ChatScreen> {
         _messages[index] = latest.copyWith(
           requestFlow: latest.requestFlow!.copyWith(
             stage: RequestFlowStage.confirming,
-            errorMessage: 'ما قدرت أرسل طلبك حالياً، حاول مرة ثانية.',
+            errorMessage: 'ما قدرت ابعت طلبك هلأ، حاول مرة كمان.',
           ),
         );
       });
@@ -722,7 +722,6 @@ class _ChatScreenState extends State<ChatScreen> {
                   _quickChip('أقرب صيدلية'),
                   _quickChip('أقرب فندق'),
                   _quickChip('أقرب محطة بنزين'),
-                  _quickChip('العروض القريبة'),
                 ],
               ),
             ),

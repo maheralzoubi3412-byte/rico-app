@@ -42,7 +42,7 @@ class QueryIntent {
 }
 
 class IntentService {
-  // خريطة كلمات مفتاحية عربية شائعة في السعودية → فئة تحتوي عدة وسوم OSM بديلة
+  // خريطة كلمات مفتاحية عربية شائعة بالأردن → فئة تحتوي عدة وسوم OSM بديلة
   // (وسم واحد يفوّت أماكناً حقيقية موسومة بشكل مختلف قليلاً في البيانات)
   // مرجع الوسوم: https://wiki.openstreetmap.org/wiki/Map_features
   static final List<Map<String, Object>> _categories = [
