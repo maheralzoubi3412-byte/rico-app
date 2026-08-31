@@ -61,8 +61,13 @@ class _ChatScreenState extends State<ChatScreen> {
     setState(() {
       if (restored.isEmpty) {
         _messages.add(ChatMessage(
-          text:
-              'هلا وسهلا 👋 أنا ريكو، مساعدك الذكي في السعودية.\nاسألني مثلاً: "أقرب مطعم" أو "أرخص كافيه قريب" وبقترح لك أفضل الخيارات حسب موقعك.',
+          text: 'هلا والله 👋\n'
+              'تقدر تسألني عن:\n'
+              '🍔 مطاعم قريبة\n'
+              '☕ كافيهات\n'
+              '🛍️ محلات\n'
+              '🔥 عروض وخصومات\n'
+              'أو قل لي وش بخاطرك وبضبطه لك 👌',
           sender: MessageSender.bot,
         ));
       } else {

@@ -113,7 +113,7 @@ export class ClassifyService {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: process.env.GROQ_MODEL || 'llama-3.3-70b-versatile',
+          model: process.env.GROQ_MODEL || 'openai/gpt-oss-120b',
           messages: [{ role: 'system', content: systemContent }, ...(dto.history || []), { role: 'user', content: dto.message }],
           response_format: { type: 'json_object' },
           // Was 0 (fully deterministic) — bumped slightly so the `reply`
@@ -122,7 +122,12 @@ export class ClassifyService {
           // modest bump is unlikely to destabilize them, but this is a
           // judgment call worth re-checking if classification quality drops.
           temperature: 0.2,
-          max_tokens: 350,
+          // gpt-oss models spend tokens on hidden reasoning before the JSON
+          // output; reasoning_effort: 'low' keeps that overhead small enough
+          // to fit the free tier's 8K TPM cap, and max_tokens has headroom
+          // above the old (non-reasoning) budget to cover it.
+          reasoning_effort: 'low',
+          max_tokens: 500,
         }),
       });
     } catch {

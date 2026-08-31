@@ -22,6 +22,16 @@ class UnderstandingCard extends StatelessWidget {
     'hospital': '🏥',
     'clinic': '🩺',
     'fitness_centre': '🏋️',
+    'hotel': '🏨',
+    'clothes': '👕',
+    'mobile_phone': '📱',
+    'electronics': '🔌',
+    'hairdresser': '💈',
+    'beauty': '💅',
+    'car_wash': '🚗',
+    'dentist': '🦷',
+    'mosque': '🕌',
+    'park': '🌳',
   };
 
   String get _categoryIcon =>

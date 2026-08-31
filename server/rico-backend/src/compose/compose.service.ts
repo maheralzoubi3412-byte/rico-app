@@ -29,14 +29,15 @@ export class ComposeService {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: process.env.GROQ_MODEL || 'llama-3.3-70b-versatile',
+          model: process.env.GROQ_MODEL || 'openai/gpt-oss-120b',
           messages: [
             { role: 'system', content: COMPOSE_SYSTEM_PROMPT },
             { role: 'user', content: JSON.stringify(userPayload) },
           ],
           response_format: { type: 'json_object' },
           temperature: 0.3,
-          max_tokens: 200,
+          reasoning_effort: 'low',
+          max_tokens: 260,
         }),
       });
     } catch {

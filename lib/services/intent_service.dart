@@ -87,6 +87,24 @@ class IntentService {
       'words': 'مول|مركز تسوق|مولات',
     },
     {
+      'slug': 'clothes',
+      'tags': [const OsmTag('shop', 'clothes')],
+      'label': 'محل ملابس',
+      'words': 'ملابس|عبايات|ثياب|بدلة|فستان',
+    },
+    {
+      'slug': 'mobile_phone',
+      'tags': [const OsmTag('shop', 'mobile_phone')],
+      'label': 'محل جوالات',
+      'words': 'جوال|جوالات|موبايل|آيفون|ايفون',
+    },
+    {
+      'slug': 'electronics',
+      'tags': [const OsmTag('shop', 'electronics')],
+      'label': 'محل إلكترونيات',
+      'words': 'الكترونيات|إلكترونيات|كهربائيات|أجهزة كهربائية',
+    },
+    {
       'slug': 'atm',
       'tags': [const OsmTag('amenity', 'atm')],
       'label': 'صراف',
@@ -97,6 +115,14 @@ class IntentService {
       'tags': [const OsmTag('amenity', 'bank')],
       'label': 'بنك',
       'words': 'بنك|بنوك',
+    },
+    {
+      // يجب أن تُفحص قبل clinic: "عيادة اسنان" تحتوي كلمة "عيادة" التي
+      // تطابق أيضاً كلمات clinic، والفحص يتوقف عند أول فئة مطابقة
+      'slug': 'dentist',
+      'tags': [const OsmTag('amenity', 'dentist')],
+      'label': 'عيادة أسنان',
+      'words': 'اسنان|أسنان|طبيب اسنان|طبيب أسنان|دكتور اسنان',
     },
     {
       'slug': 'hospital',
@@ -111,6 +137,24 @@ class IntentService {
       'words': 'عيادة|عيادات',
     },
     {
+      'slug': 'hairdresser',
+      'tags': [const OsmTag('shop', 'hairdresser')],
+      'label': 'صالون حلاقة',
+      'words': 'حلاق|حلاقة|صالون رجالي',
+    },
+    {
+      'slug': 'beauty',
+      'tags': [const OsmTag('shop', 'beauty')],
+      'label': 'صالون تجميل',
+      'words': 'صالون نسائي|تجميل|مانكير|مكياج|كوافير',
+    },
+    {
+      'slug': 'car_wash',
+      'tags': [const OsmTag('shop', 'car_wash')],
+      'label': 'مغسلة سيارات',
+      'words': 'مغسلة سيارات|غسيل سيارة|غسيل سيارتي|غسيل سيارات',
+    },
+    {
       'slug': 'fitness_centre',
       'tags': [const OsmTag('leisure', 'fitness_centre'), const OsmTag('leisure', 'sports_centre')],
       'label': 'نادي رياضي',
@@ -121,6 +165,18 @@ class IntentService {
       'tags': [const OsmTag('tourism', 'hotel'), const OsmTag('tourism', 'apartment')],
       'label': 'فندق',
       'words': 'فندق|فنادق|شقة مفروشة|شقق مفروشة|إقامة|استراحة',
+    },
+    {
+      'slug': 'mosque',
+      'tags': [const OsmTag('amenity', 'place_of_worship')],
+      'label': 'مسجد',
+      'words': 'مسجد|مساجد|جامع',
+    },
+    {
+      'slug': 'park',
+      'tags': [const OsmTag('leisure', 'park')],
+      'label': 'حديقة',
+      'words': 'حديقة|حدائق|منتزه|متنزه',
     },
   ];
 

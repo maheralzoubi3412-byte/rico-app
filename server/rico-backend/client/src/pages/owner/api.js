@@ -23,6 +23,16 @@ export const CATEGORY_LABELS = {
   hospital: 'مستشفيات',
   clinic: 'عيادات',
   fitness_centre: 'نوادي رياضية',
+  hotel: 'فنادق',
+  clothes: 'محلات ملابس',
+  mobile_phone: 'محلات جوالات',
+  electronics: 'محلات إلكترونيات',
+  hairdresser: 'صالونات حلاقة',
+  beauty: 'صالونات تجميل',
+  car_wash: 'مغاسل سيارات',
+  dentist: 'عيادات أسنان',
+  mosque: 'مساجد',
+  park: 'حدائق',
 };
 
 export const CLAIM_STATUS_LABELS = {

@@ -15,6 +15,15 @@ export const GOOGLE_TYPE_BY_CATEGORY: Record<string, string[]> = {
   clinic: ['doctor'],
   fitness_centre: ['gym'],
   hotel: ['lodging'],
+  clothes: ['clothing_store'],
+  mobile_phone: ['cell_phone_store'],
+  electronics: ['electronics_store'],
+  hairdresser: ['barber_shop'],
+  beauty: ['beauty_salon'],
+  car_wash: ['car_wash'],
+  dentist: ['dentist'],
+  mosque: ['mosque'],
+  park: ['park'],
 };
 
 const FIELD_MASK = 'places.id,places.displayName,places.location,places.priceLevel,places.rating,places.userRatingCount';

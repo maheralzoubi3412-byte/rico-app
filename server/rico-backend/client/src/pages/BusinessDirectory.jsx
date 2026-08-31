@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { CATEGORY_LABELS } from './owner/api';
 
 export default function BusinessDirectory() {
   const [items, setItems] = useState(null); // null = loading
@@ -36,17 +37,11 @@ export default function BusinessDirectory() {
         <label htmlFor="categoryFilter">تصفية حسب الفئة</label>
         <select id="categoryFilter" value={category} onChange={(e) => setCategory(e.target.value)}>
           <option value="">كل الفئات</option>
-          <option value="restaurant">مطاعم</option>
-          <option value="cafe">كافيهات</option>
-          <option value="pharmacy">صيدليات</option>
-          <option value="supermarket">سوبرماركت</option>
-          <option value="fuel">محطات وقود</option>
-          <option value="mall">مولات</option>
-          <option value="atm">صرافات آلية</option>
-          <option value="bank">بنوك</option>
-          <option value="hospital">مستشفيات</option>
-          <option value="clinic">عيادات</option>
-          <option value="fitness_centre">نوادي رياضية</option>
+          {Object.entries(CATEGORY_LABELS).map(([slug, label]) => (
+            <option key={slug} value={slug}>
+              {label}
+            </option>
+          ))}
         </select>
 
         {error && <div className="status error">{error}</div>}
