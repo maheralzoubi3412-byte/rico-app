@@ -12,7 +12,9 @@ class CatalogException implements Exception {
 /// يجلب منتجات وعروض نشاط تجاري واحد من rico-backend (GET /places/:id/catalog)
 /// — لعرضها داخل الدردشة عند اختيار نتيجة بحث حقيقية (source == 'rico').
 class CatalogService {
-  static const String _baseUrl = 'http://localhost:3000';
+  // للتجربة المحلية بدّلها لـ http://localhost:3000 (iOS Simulator/سطح
+  // المكتب) أو http://10.0.2.2:3000 (Android Emulator).
+  static const String _baseUrl = 'https://app.rico-go.com';
 
   Future<BusinessCatalog> fetchCatalog(String businessId) async {
     http.Response response;

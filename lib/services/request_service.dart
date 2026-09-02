@@ -12,7 +12,9 @@ class RequestException implements Exception {
 /// rico-backend (POST /requests) — يظهر لصاحب النشاط في لوحته ليتواصل مع
 /// العميل مباشرة. لا نظام دفع أو توصيل، مجرد طلب/اهتمام (lead).
 class RequestService {
-  static const String _baseUrl = 'http://localhost:3000';
+  // للتجربة المحلية بدّلها لـ http://localhost:3000 (iOS Simulator/سطح
+  // المكتب) أو http://10.0.2.2:3000 (Android Emulator).
+  static const String _baseUrl = 'https://app.rico-go.com';
 
   Future<void> submitRequest({
     required String businessId,

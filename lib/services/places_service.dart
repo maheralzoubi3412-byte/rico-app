@@ -67,9 +67,9 @@ class PlacesService {
   // بالمناطق المزوَّدة ببيانات — Overpass يبقى المصدر الاحتياطي دوماً لأنه
   // يغطي كل العالم. لا معنى لطلب بعلامة تجارية محددة (brandHint) من
   // rico-api لأن /search لا يفلتر بالاسم بعد، فنتجاهله في هذه الحالة.
-  // TODO: حدّث هذا الرابط بعد نشر rico-backend (Render). للتجربة المحلية:
-  // http://localhost:3000 (iOS Simulator/سطح المكتب) أو http://10.0.2.2:3000 (Android Emulator).
-  static const String _ricoApiBaseUrl = 'http://localhost:3000';
+  // للتجربة المحلية بدّلها لـ http://localhost:3000 (iOS Simulator/سطح
+  // المكتب) أو http://10.0.2.2:3000 (Android Emulator).
+  static const String _ricoApiBaseUrl = 'https://app.rico-go.com';
 
   Future<List<PlaceResult>> search({
     required double userLat,

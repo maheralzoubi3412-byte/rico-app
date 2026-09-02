@@ -6,10 +6,10 @@ import 'package:http/http.dart' as http;
 /// نشاط، وتحليل أداء العروض حسب نوعها إذا تضمّن الظهور عرضاً محدداً. جهد
 /// أفضل (best-effort) بحت: لا يوقف أو يبطئ عرض النتائج للمستخدم، ولا يُظهر
 /// أي خطأ إذا فشل الاتصال.
-///
-/// TODO: حدّث هذا الرابط بعد نشر rico-backend (Render)، كما في باقي الخدمات.
 class ImpressionService {
-  static const String _baseUrl = 'http://localhost:3000';
+  // للتجربة المحلية بدّلها لـ http://localhost:3000 (iOS Simulator/سطح
+  // المكتب) أو http://10.0.2.2:3000 (Android Emulator).
+  static const String _baseUrl = 'https://app.rico-go.com';
 
   /// [businessIds]: ظهور نتائج بحث عادية (بلا عرض محدد).
   Future<void> track(List<String> businessIds) async {

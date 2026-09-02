@@ -12,10 +12,10 @@ class DealsException implements Exception {
 /// يجلب العروض/الخصومات القريبة من rico-backend (خادم NestJS، انظر
 /// server/rico-backend — يستبدل rico-api/groq-proxy القديمة).
 class DealsService {
-  // TODO: حدّث هذا الرابط بعد نشر rico-backend (Render). للتجربة المحلية:
-  // استخدم http://localhost:3000 على iOS Simulator/سطح المكتب، أو
-  // http://10.0.2.2:3000 على Android Emulator (localhost يشير لجهاز المحاكي نفسه لا لجهازك).
-  static const String _baseUrl = 'http://localhost:3000';
+  // للتجربة المحلية استخدم http://localhost:3000 على iOS Simulator/سطح
+  // المكتب، أو http://10.0.2.2:3000 على Android Emulator (localhost يشير
+  // لجهاز المحاكي نفسه لا لجهازك).
+  static const String _baseUrl = 'https://app.rico-go.com';
 
   Future<List<Deal>> fetchNearby({
     required double lat,
