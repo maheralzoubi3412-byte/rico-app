@@ -1,12 +1,5 @@
-/// زوج وسم OpenStreetMap (key=value) يمكن مطابقته في Overpass
-class OsmTag {
-  final String key;
-  final String value;
-  const OsmTag(this.key, this.value);
-}
-
 /// طريقة ترتيب النتائج المطلوبة. best_rated غير مفعّلة فعلياً بعد (تحتاج
-/// بيانات تقييم حقيقية غير متوفرة في OSM) — محجوزة للمرحلة القادمة.
+/// بيانات تقييم حقيقية غير متوفرة دوماً).
 enum RankMode { nearest, cheapest, openNow, bestRated }
 
 /// نوع النية: بحث عن مكان، أو استفسار عن عروض/خصومات (لا يرتبط بفئة مكان).
@@ -16,7 +9,6 @@ enum IntentKind { place, deals }
 /// انظر [IntentService.parseMulti]).
 class QueryIntent {
   final IntentKind kind;
-  final List<OsmTag> tags; // فارغة لنوايا kind=deals
   final String label; // اسم عربي مفهوم للعرض في الرد
   final RankMode rank;
   final String? brandHint;
@@ -29,7 +21,6 @@ class QueryIntent {
 
   QueryIntent({
     this.kind = IntentKind.place,
-    this.tags = const [],
     required this.label,
     this.rank = RankMode.nearest,
     this.brandHint,
@@ -42,77 +33,63 @@ class QueryIntent {
 }
 
 class IntentService {
-  // خريطة كلمات مفتاحية عربية شائعة بالأردن → فئة تحتوي عدة وسوم OSM بديلة
-  // (وسم واحد يفوّت أماكناً حقيقية موسومة بشكل مختلف قليلاً في البيانات)
-  // مرجع الوسوم: https://wiki.openstreetmap.org/wiki/Map_features
+  // خريطة كلمات مفتاحية عربية شائعة بالأردن → فئة (نفس الفئات الثابتة
+  // المعرّفة في CATEGORIES بـclassify.constants.ts على الخادم، وGOOGLE_TYPE_BY_
+  // CATEGORY بـgoogle-places.adapter.ts — أي فئة تُضاف هناك يجب أن تُضاف هنا
+  // أيضاً وإلا فشل IntentService.byCategorySlug بإرجاع null لها).
   static final List<Map<String, Object>> _categories = [
     {
       'slug': 'restaurant',
-      'tags': [const OsmTag('amenity', 'restaurant'), const OsmTag('amenity', 'fast_food')],
       'label': 'مطعم',
       'words': 'مطعم|مطاعم|اكل|أكل|طعام|غداء|عشاء|فطور|جوعان|جوعانة|وجبة',
     },
     {
       'slug': 'cafe',
-      'tags': [const OsmTag('amenity', 'cafe')],
       'label': 'كافيه',
       'words': 'قهوة|كافيه|كافي|كوفي|مقهى|قهاوي',
     },
     {
       'slug': 'pharmacy',
-      'tags': [const OsmTag('amenity', 'pharmacy')],
       'label': 'صيدلية',
       'words': 'صيدلية|صيدليه|دواء|أدوية',
     },
     {
       'slug': 'supermarket',
-      'tags': [
-        const OsmTag('shop', 'supermarket'),
-        const OsmTag('shop', 'convenience'),
-        const OsmTag('shop', 'grocery'),
-      ],
       'label': 'سوبرماركت',
       'words': 'سوبرماركت|بقالة|بقاله|هايبر|هايبرماركت',
     },
     {
       'slug': 'fuel',
-      'tags': [const OsmTag('amenity', 'fuel')],
       'label': 'محطة بنزين',
       'words': 'بنزين|محطة وقود|محطة بترول|تعبئة',
     },
     {
       'slug': 'mall',
-      'tags': [const OsmTag('shop', 'mall'), const OsmTag('shop', 'department_store')],
       'label': 'مول',
       'words': 'مول|مركز تسوق|مولات',
     },
     {
       'slug': 'clothes',
-      'tags': [const OsmTag('shop', 'clothes')],
       'label': 'محل ملابس',
       'words': 'ملابس|عبايات|ثياب|بدلة|فستان',
     },
     {
       'slug': 'mobile_phone',
-      'tags': [const OsmTag('shop', 'mobile_phone')],
       'label': 'محل جوالات',
       'words': 'جوال|جوالات|موبايل|آيفون|ايفون',
     },
     {
       'slug': 'electronics',
-      'tags': [const OsmTag('shop', 'electronics')],
       'label': 'محل إلكترونيات',
       'words': 'الكترونيات|إلكترونيات|كهربائيات|أجهزة كهربائية',
     },
     {
       'slug': 'atm',
-      'tags': [const OsmTag('amenity', 'atm')],
       'label': 'صراف',
       'words': 'صراف|ماكينة صراف|ATM',
     },
     {
       'slug': 'bank',
-      'tags': [const OsmTag('amenity', 'bank')],
       'label': 'بنك',
       'words': 'بنك|بنوك',
     },
@@ -120,63 +97,153 @@ class IntentService {
       // يجب أن تُفحص قبل clinic: "عيادة اسنان" تحتوي كلمة "عيادة" التي
       // تطابق أيضاً كلمات clinic، والفحص يتوقف عند أول فئة مطابقة
       'slug': 'dentist',
-      'tags': [const OsmTag('amenity', 'dentist')],
       'label': 'عيادة أسنان',
       'words': 'اسنان|أسنان|طبيب اسنان|طبيب أسنان|دكتور اسنان',
     },
     {
       'slug': 'hospital',
-      'tags': [const OsmTag('amenity', 'hospital')],
       'label': 'مستشفى',
       'words': 'مستشفى|طوارئ|مستشفيات',
     },
     {
       'slug': 'clinic',
-      'tags': [const OsmTag('amenity', 'clinic'), const OsmTag('amenity', 'doctors')],
       'label': 'عيادة',
       'words': 'عيادة|عيادات',
     },
     {
       'slug': 'hairdresser',
-      'tags': [const OsmTag('shop', 'hairdresser')],
       'label': 'صالون حلاقة',
       'words': 'حلاق|حلاقة|صالون رجالي',
     },
     {
       'slug': 'beauty',
-      'tags': [const OsmTag('shop', 'beauty')],
       'label': 'صالون تجميل',
       'words': 'صالون نسائي|تجميل|مانكير|مكياج|كوافير',
     },
     {
       'slug': 'car_wash',
-      'tags': [const OsmTag('shop', 'car_wash')],
       'label': 'مغسلة سيارات',
       'words': 'مغسلة سيارات|غسيل سيارة|غسيل سيارتي|غسيل سيارات',
     },
     {
       'slug': 'fitness_centre',
-      'tags': [const OsmTag('leisure', 'fitness_centre'), const OsmTag('leisure', 'sports_centre')],
       'label': 'نادي رياضي',
       'words': 'جيم|نادي رياضي|صالة رياضية',
     },
     {
       'slug': 'hotel',
-      'tags': [const OsmTag('tourism', 'hotel'), const OsmTag('tourism', 'apartment')],
       'label': 'فندق',
       'words': 'فندق|فنادق|شقة مفروشة|شقق مفروشة|إقامة|استراحة',
     },
     {
       'slug': 'mosque',
-      'tags': [const OsmTag('amenity', 'place_of_worship')],
       'label': 'مسجد',
       'words': 'مسجد|مساجد|جامع',
     },
     {
       'slug': 'park',
-      'tags': [const OsmTag('leisure', 'park')],
       'label': 'حديقة',
       'words': 'حديقة|حدائق|منتزه|متنزه',
+    },
+    {
+      'slug': 'bakery',
+      'label': 'مخبز',
+      'words': 'مخبز|مخابز|فطاير|فطائر',
+    },
+    {
+      'slug': 'sweets',
+      'label': 'محل حلويات',
+      'words': 'حلويات|حلا|بقلاوة|شوكولاتة|كنافة',
+    },
+    {
+      'slug': 'bookstore',
+      'label': 'مكتبة',
+      'words': 'مكتبة|كتب|مكتبات',
+    },
+    {
+      'slug': 'toy_store',
+      'label': 'محل ألعاب أطفال',
+      'words': 'العاب اطفال|ألعاب أطفال|لعب اطفال',
+    },
+    {
+      'slug': 'pet_store',
+      'label': 'محل حيوانات أليفة',
+      'words': 'بيت شوب|محل حيوانات|طيور واسماك',
+    },
+    {
+      'slug': 'jewelry_store',
+      'label': 'محل مجوهرات',
+      'words': 'مجوهرات|ذهب|جواهرجي|مصاغ',
+    },
+    {
+      'slug': 'furniture_store',
+      'label': 'محل أثاث',
+      'words': 'اثاث|أثاث|موبيليا|عفش',
+    },
+    {
+      'slug': 'shoe_store',
+      'label': 'محل أحذية',
+      'words': 'جزمة|احذية|أحذية|شوزات',
+    },
+    {
+      'slug': 'gift_shop',
+      'label': 'محل هدايا',
+      'words': 'هدايا|هدية',
+    },
+    {
+      'slug': 'florist',
+      'label': 'محل ورد',
+      'words': 'ورد|زهور|بائع ورد|زهرية',
+    },
+    {
+      'slug': 'laundry',
+      'label': 'مغسلة ملابس',
+      'words': 'مغسلة ملابس|كوي|تنظيف جاف',
+    },
+    {
+      'slug': 'veterinary',
+      'label': 'عيادة بيطرية',
+      'words': 'بيطري|عيادة حيوانات|دكتور حيوانات',
+    },
+    {
+      'slug': 'car_repair',
+      'label': 'كراج تصليح سيارات',
+      'words': 'كراج|تصليح سيارات|ميكانيكي|تواير|بنشر',
+    },
+    {
+      'slug': 'car_dealer',
+      'label': 'معرض سيارات',
+      'words': 'معرض سيارات|بيع سيارات|شراء سيارات',
+    },
+    {
+      'slug': 'car_rental',
+      'label': 'تأجير سيارات',
+      'words': 'تأجير سيارات|رنت كار|ايجار سيارة',
+    },
+    {
+      'slug': 'parking',
+      'label': 'موقف سيارات',
+      'words': 'موقف سيارات|باركنج|كراج مواقف',
+    },
+    {
+      'slug': 'lawyer',
+      'label': 'محامي',
+      'words': 'محامي|مكتب محاماة|محاماة',
+    },
+    {
+      'slug': 'real_estate',
+      'label': 'مكتب عقارات',
+      'words': 'عقار|عقارات|مكتب عقاري|مكتب عقارات',
+    },
+    {
+      'slug': 'travel_agency',
+      'label': 'مكتب سفريات',
+      'words': 'سفريات|حجوزات|وكالة سفر|مكتب سفر',
+    },
+    {
+      'slug': 'insurance',
+      'label': 'شركة تأمين',
+      'words': 'تأمين|شركة تأمين|بوليصة',
     },
   ];
 
@@ -230,7 +297,6 @@ class IntentService {
     chosen ??= _categories.first;
 
     return QueryIntent(
-      tags: chosen['tags'] as List<OsmTag>,
       label: chosen['label'] as String,
       rank: _detectRank(text),
       slug: chosen['slug'] as String,
@@ -238,7 +304,7 @@ class IntentService {
   }
 
   /// يفكك رسالة واحدة إلى عدة نوايا مستقلة إذا جمعت أكثر من طلب (مثال:
-  /// "أقرب مطعم أو أرخص كافيه، وايش العروض المتوفرة؟" → ٣ نوايا مستقلة).
+  /// "أقرب مطعم أو أرخص كافيه، وشو العروض الموجودة؟" → ٣ نوايا مستقلة).
   /// هذا مسار بديل محلي يُستخدم فقط عند فشل مصنّف الـLLM؛ لا يحاول فصل نية
   /// مكان عن نية عروض مذكورتين معاً داخل نفس الجزء النصي (مثال: "مطعم فيه
   /// عروض" تُعامل كنية عروض فقط) — الفصل الدقيق متروك لمصنّف الـLLM.
@@ -279,7 +345,6 @@ class IntentService {
     for (final category in _categories) {
       if (category['slug'] == slug) {
         return QueryIntent(
-          tags: category['tags'] as List<OsmTag>,
           label: category['label'] as String,
           rank: rank,
           brandHint: brandHint,

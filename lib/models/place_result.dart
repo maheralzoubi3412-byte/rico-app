@@ -13,9 +13,10 @@ class PlaceResult {
   final double? rating; // 0-5، من rico-api فقط
   final int? ratingCount;
 
-  /// 'rico' إذا وصل من rico-backend (osmId عندها معرّف Business حقيقي في
-  /// قاعدتنا)، أو 'osm' إذا وصل من Overpass (لا يقابله سجل Business فعلي).
-  /// يُستخدم لتفادي إرسال أحداث تتبّع بمعرّفات لا تقابل نشاطاً تجارياً حقيقياً.
+  /// 'rico' إذا وصل نشاطاً حقيقياً من قاعدتنا (قابل لعرض كتالوج/طلب فعلي)،
+  /// أو 'google' إذا وصل من Google Places كنتيجة تكميلية بلا سجل نشاط تجاري
+  /// عندنا. يُستخدم لتفادي إرسال أحداث تتبّع أو تفعيل كتالوج/طلب بمعرّفات
+  /// لا تقابل نشاطاً تجارياً حقيقياً.
   final String source;
 
   PlaceResult({
@@ -30,46 +31,11 @@ class PlaceResult {
     this.priceLevel,
     this.rating,
     this.ratingCount,
-    this.source = 'osm',
+    this.source = 'google',
   });
 
-  /// يبني عنصر مكان من استجابة Overpass API (OpenStreetMap)
-  /// عنصر node يحتوي lat/lon مباشرة، وعنصر way/relation يحتوي center: {lat, lon}
-  factory PlaceResult.fromOsmElement(Map<String, dynamic> json) {
-    final tags = (json['tags'] ?? {}) as Map<String, dynamic>;
-
-    double lat;
-    double lng;
-    if (json['type'] == 'node') {
-      lat = (json['lat'] ?? 0).toDouble();
-      lng = (json['lon'] ?? 0).toDouble();
-    } else {
-      final center = json['center'] ?? {};
-      lat = (center['lat'] ?? 0).toDouble();
-      lng = (center['lon'] ?? 0).toDouble();
-    }
-
-    // نبني عنوان مبسّط من حقول addr:* إن وجدت
-    final addrParts = [
-      tags['addr:street'],
-      tags['addr:district'],
-      tags['addr:city'],
-    ].where((p) => p != null && p.toString().trim().isNotEmpty).toList();
-
-    return PlaceResult(
-      osmId: '${json['type']}/${json['id']}',
-      name: (tags['name'] ?? tags['name:ar'] ?? 'مكان بدون اسم').toString(),
-      address: addrParts.join('، '),
-      lat: lat,
-      lng: lng,
-      phone: (tags['phone'] ?? tags['contact:phone'])?.toString(),
-      openingHours: tags['opening_hours']?.toString(),
-      source: 'osm',
-    );
-  }
-
   /// يبني عنصر مكان من استجابة rico-api (GET /search) — قد تحتوي بيانات سعر
-  /// وتقييم حقيقية غير متوفرة في Overpass.
+  /// وتقييم حقيقية من قاعدتنا أو من Google Places حسب source.
   factory PlaceResult.fromRicoApiJson(Map<String, dynamic> json) {
     return PlaceResult(
       osmId: json['id'] as String,
@@ -83,7 +49,7 @@ class PlaceResult {
       priceLevel: json['priceLevel'] as int?,
       rating: (json['rating'] as num?)?.toDouble(),
       ratingCount: json['ratingCount'] as int?,
-      source: 'rico',
+      source: (json['source'] as String?) ?? 'rico',
     );
   }
 
@@ -156,7 +122,7 @@ class PlaceResult {
       priceLevel: json['priceLevel'] as int?,
       rating: (json['rating'] as num?)?.toDouble(),
       ratingCount: json['ratingCount'] as int?,
-      source: json['source'] as String? ?? 'osm',
+      source: json['source'] as String? ?? 'google',
     );
   }
 }

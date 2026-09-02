@@ -257,7 +257,6 @@ class _ChatScreenState extends State<ChatScreen> {
       final places = await _placesService.search(
         userLat: origin.lat,
         userLng: origin.lng,
-        tags: intent.tags,
         cheapest: intent.wantsCheapest,
         openNow: intent.wantsOpenNow,
         bestRated: intent.rank == RankMode.bestRated,

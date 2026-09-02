@@ -1,7 +1,6 @@
 import { BadGatewayException, ConflictException, HttpException, HttpStatus, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
-import { ApiUsage, ApiUsageDocument } from './schemas/api-usage.schema';
 import { SyncLog, SyncLogDocument } from './schemas/sync-log.schema';
 import { BusinessClaim, BusinessClaimDocument } from '../vendor/schemas/business-claim.schema';
 import { Account, AccountDocument } from '../accounts/schemas/account.schema';
@@ -21,7 +20,13 @@ import { CreateDealDto } from '../deals/dto/create-deal.dto';
 import { SyncGoogleDto } from './dto/sync-google.dto';
 import { ListBusinessesDto } from './dto/list-businesses.dto';
 import { ListVendorsDto } from './dto/list-vendors.dto';
-import { GOOGLE_TYPE_BY_CATEGORY, searchNearby } from './adapters/google-places.adapter';
+import {
+  GOOGLE_PLACES_PROVIDER,
+  DEFAULT_GOOGLE_PLACES_MONTHLY_CAP,
+  GOOGLE_TYPE_BY_CATEGORY,
+  searchNearby,
+} from '../integrations/google-places.adapter';
+import { ApiUsageService } from '../api-usage/api-usage.service';
 import { EARTH_RADIUS_METERS } from '../common/utils/geo.util';
 
 function escapeRegex(value: string): string {
@@ -47,21 +52,13 @@ function computeHealthScore({
   return Math.round(ratingScore * 0.4 + dealsScore * 0.3 + claimScore * 0.3);
 }
 
-const GOOGLE_PLACES_PROVIDER = 'google_places';
-const DEFAULT_MONTHLY_CAP = 200;
+const DEFAULT_MONTHLY_CAP = DEFAULT_GOOGLE_PLACES_MONTHLY_CAP;
 const DEFAULT_COOLDOWN_DAYS = 30;
 const COOLDOWN_RADIUS_METERS = 20000;
-
-function currentPeriod(): string {
-  const d = new Date();
-  const month = String(d.getUTCMonth() + 1).padStart(2, '0');
-  return `${d.getUTCFullYear()}-${month}`;
-}
 
 @Injectable()
 export class OwnerService {
   constructor(
-    @InjectModel(ApiUsage.name) private readonly apiUsageModel: Model<ApiUsageDocument>,
     @InjectModel(SyncLog.name) private readonly syncLogModel: Model<SyncLogDocument>,
     @InjectModel(BusinessClaim.name) private readonly claimModel: Model<BusinessClaimDocument>,
     @InjectModel(Account.name) private readonly accountModel: Model<AccountDocument>,
@@ -75,6 +72,7 @@ export class OwnerService {
     private readonly dealsService: DealsService,
     private readonly accountsService: AccountsService,
     private readonly mailerService: MailerService,
+    private readonly apiUsageService: ApiUsageService,
   ) {}
 
   // ---- Sourcing (manual entry + Google Places sync) ----------------------
@@ -102,17 +100,6 @@ export class OwnerService {
   async createManualDeal(dto: CreateDealDto) {
     const deal = await this.dealsService.createManual({ ...dto, source: 'manual', status: 'active' });
     return { dealId: deal._id };
-  }
-
-  private async getApiUsage(provider: string): Promise<{ period: string; count: number }> {
-    const period = currentPeriod();
-    const row = await this.apiUsageModel.findOne({ provider, period }).lean();
-    return { period, count: row ? row.requestCount : 0 };
-  }
-
-  private async incrementApiUsage(provider: string, by = 1): Promise<void> {
-    const period = currentPeriod();
-    await this.apiUsageModel.findOneAndUpdate({ provider, period }, { $inc: { requestCount: by } }, { upsert: true });
   }
 
   private async recentSync({
@@ -151,7 +138,7 @@ export class OwnerService {
     const monthlyCap = process.env.GOOGLE_PLACES_MONTHLY_CAP ? Number(process.env.GOOGLE_PLACES_MONTHLY_CAP) : DEFAULT_MONTHLY_CAP;
     const cooldownDays = process.env.GOOGLE_SYNC_COOLDOWN_DAYS ? Number(process.env.GOOGLE_SYNC_COOLDOWN_DAYS) : DEFAULT_COOLDOWN_DAYS;
 
-    const usage = await this.getApiUsage(GOOGLE_PLACES_PROVIDER);
+    const usage = await this.apiUsageService.getUsage(GOOGLE_PLACES_PROVIDER);
     if (usage.count >= monthlyCap) {
       throw new HttpException(
         {
@@ -185,7 +172,7 @@ export class OwnerService {
       throw new BadGatewayException({ error: 'google_places_error', detail: String((e as Error).message || e) });
     }
 
-    await this.incrementApiUsage(GOOGLE_PLACES_PROVIDER);
+    await this.apiUsageService.increment(GOOGLE_PLACES_PROVIDER);
     await this.syncLogModel.create({
       provider: GOOGLE_PLACES_PROVIDER,
       categorySlug,
@@ -202,7 +189,7 @@ export class OwnerService {
       else updated++;
     }
 
-    const usageAfter = await this.getApiUsage(GOOGLE_PLACES_PROVIDER);
+    const usageAfter = await this.apiUsageService.getUsage(GOOGLE_PLACES_PROVIDER);
     return {
       synced: results.length,
       created,
@@ -213,7 +200,7 @@ export class OwnerService {
 
   async getUsage() {
     const monthlyCap = process.env.GOOGLE_PLACES_MONTHLY_CAP ? Number(process.env.GOOGLE_PLACES_MONTHLY_CAP) : DEFAULT_MONTHLY_CAP;
-    const usage = await this.getApiUsage(GOOGLE_PLACES_PROVIDER);
+    const usage = await this.apiUsageService.getUsage(GOOGLE_PLACES_PROVIDER);
     return {
       googlePlaces: {
         period: usage.period,

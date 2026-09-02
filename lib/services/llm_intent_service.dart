@@ -35,7 +35,6 @@ class ResolvedIntent {
     if (category == 'other') {
       if (customTagKey == null || customTagValue == null || label == null) return null;
       return QueryIntent(
-        tags: [OsmTag(customTagKey!, customTagValue!)],
         label: label!,
         rank: rankMode,
         brandHint: brandHint,

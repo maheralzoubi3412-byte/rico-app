@@ -1,29 +1,60 @@
 // Enriches businesses with real price_level/rating from the Google Places
 // API (New). This is the only adapter that costs money per call — keep the
 // FieldMask minimal (only fields our schema actually stores).
+//
+// Used by two callers sharing one monthly budget (see ApiUsageService):
+// the admin sourcing sync (owner.service.ts) and the live /search fallback
+// (search.service.ts) for categories the DB doesn't have enough of yet.
+
+export const GOOGLE_PLACES_PROVIDER = 'google_places';
+export const DEFAULT_GOOGLE_PLACES_MONTHLY_CAP = 200;
 
 export const GOOGLE_TYPE_BY_CATEGORY: Record<string, string[]> = {
-  restaurant: ['restaurant'],
-  cafe: ['cafe'],
+  // Original 21 categories, broadened where Google's Table A (New) has
+  // multiple relevant types instead of one narrow type per category.
+  restaurant: ['restaurant', 'fast_food_restaurant', 'meal_takeaway', 'meal_delivery', 'food_court', 'diner'],
+  cafe: ['cafe', 'coffee_shop'],
   pharmacy: ['pharmacy'],
-  supermarket: ['supermarket', 'grocery_store'],
+  supermarket: ['supermarket', 'grocery_store', 'hypermarket', 'convenience_store'],
   fuel: ['gas_station'],
   mall: ['shopping_mall'],
   atm: ['atm'],
   bank: ['bank'],
-  hospital: ['hospital'],
-  clinic: ['doctor'],
-  fitness_centre: ['gym'],
+  hospital: ['hospital', 'general_hospital'],
+  clinic: ['doctor', 'medical_clinic', 'medical_center'],
+  fitness_centre: ['gym', 'fitness_center'],
   hotel: ['lodging'],
-  clothes: ['clothing_store'],
+  clothes: ['clothing_store', 'womens_clothing_store'],
   mobile_phone: ['cell_phone_store'],
   electronics: ['electronics_store'],
-  hairdresser: ['barber_shop'],
-  beauty: ['beauty_salon'],
+  hairdresser: ['barber_shop', 'hair_salon', 'hair_care'],
+  beauty: ['beauty_salon', 'nail_salon', 'spa'],
   car_wash: ['car_wash'],
-  dentist: ['dentist'],
+  dentist: ['dentist', 'dental_clinic'],
   mosque: ['mosque'],
   park: ['park'],
+
+  // New categories.
+  bakery: ['bakery', 'pastry_shop'],
+  sweets: ['dessert_shop', 'candy_store', 'chocolate_shop', 'cake_shop'],
+  bookstore: ['book_store'],
+  toy_store: ['toy_store'],
+  pet_store: ['pet_store'],
+  jewelry_store: ['jewelry_store'],
+  furniture_store: ['furniture_store', 'home_goods_store'],
+  shoe_store: ['shoe_store'],
+  gift_shop: ['gift_shop'],
+  florist: ['florist'],
+  laundry: ['laundry'],
+  veterinary: ['veterinary_care'],
+  car_repair: ['car_repair', 'tire_shop'],
+  car_dealer: ['car_dealer'],
+  car_rental: ['car_rental'],
+  parking: ['parking', 'parking_lot', 'parking_garage'],
+  lawyer: ['lawyer'],
+  real_estate: ['real_estate_agency'],
+  travel_agency: ['travel_agency', 'tour_agency'],
+  insurance: ['insurance_agency'],
 };
 
 const FIELD_MASK = 'places.id,places.displayName,places.location,places.priceLevel,places.rating,places.userRatingCount';
