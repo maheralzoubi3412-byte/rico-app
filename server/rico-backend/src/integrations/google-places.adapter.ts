@@ -57,7 +57,22 @@ export const GOOGLE_TYPE_BY_CATEGORY: Record<string, string[]> = {
   insurance: ['insurance_agency'],
 };
 
-const FIELD_MASK = 'places.id,places.displayName,places.location,places.priceLevel,places.rating,places.userRatingCount';
+// rating/userRatingCount/priceLevel are Enterprise-SKU fields, so every call
+// here already bills at the Enterprise tier (1,000 free/month, then $35/1000).
+// Address, phone and opening hours sit in that same tier or below, so adding
+// them costs nothing extra — don't add anything outside it (photos, reviews,
+// editorialSummary) without re-checking the SKU table, that jumps the price.
+const FIELD_MASK = [
+  'places.id',
+  'places.displayName',
+  'places.location',
+  'places.formattedAddress',
+  'places.priceLevel',
+  'places.rating',
+  'places.userRatingCount',
+  'places.nationalPhoneNumber',
+  'places.regularOpeningHours',
+].join(',');
 
 // Google's enum -> our normalized 1-4 integer scale.
 const PRICE_LEVEL_MAP: Record<string, number> = {
@@ -73,10 +88,98 @@ export interface GooglePlaceResult {
   name: string;
   categorySlug: string;
   location: { type: 'Point'; coordinates: [number, number] };
+  address: string | null;
+  phone: string | null;
+  openingHours: string | null;
+  /// Google's own open/closed verdict — far more reliable than parsing an
+  /// hours string ourselves. null when Google didn't return hours at all.
+  openNow: boolean | null;
   priceLevel: number | null;
   rating: number | null;
   ratingCount: number | null;
   enrichmentSource: string;
+}
+
+function apiKeyOrThrow(): string {
+  const apiKey = process.env.GOOGLE_PLACES_API_KEY;
+  if (!apiKey) throw new Error('google_places_not_configured');
+  return apiKey;
+}
+
+function mapPlace(p: any, categorySlug: string): GooglePlaceResult {
+  const hours = p.regularOpeningHours;
+  return {
+    sourceId: p.id,
+    name: p.displayName?.text ?? 'Unknown',
+    categorySlug,
+    location: { type: 'Point', coordinates: [p.location.longitude, p.location.latitude] },
+    address: p.formattedAddress ?? null,
+    phone: p.nationalPhoneNumber ?? null,
+    // weekdayDescriptions is localized human text ("الاثنين: 9:00 ص – 10:00 م")
+    // — display only. We never parse it; openNow below is the machine answer.
+    openingHours: Array.isArray(hours?.weekdayDescriptions) ? hours.weekdayDescriptions.join('\n') : null,
+    openNow: typeof hours?.openNow === 'boolean' ? hours.openNow : null,
+    priceLevel: PRICE_LEVEL_MAP[p.priceLevel] || null,
+    rating: typeof p.rating === 'number' ? p.rating : null,
+    ratingCount: typeof p.userRatingCount === 'number' ? p.userRatingCount : null,
+    enrichmentSource: 'google',
+  };
+}
+
+async function callGoogle(endpoint: string, body: unknown): Promise<any[]> {
+  const response = await fetch(`https://places.googleapis.com/v1/places:${endpoint}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Goog-Api-Key': apiKeyOrThrow(),
+      'X-Goog-FieldMask': FIELD_MASK,
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`google_places_error:${response.status}:${text.slice(0, 200)}`);
+  }
+
+  const data = await response.json();
+  return data.places || [];
+}
+
+/// Free-text search — the only Google endpoint that can handle a brand name
+/// ("ستاربكس"), an open-now filter, or a category we have no fixed type for.
+/// Nearby Search supports none of those, which is why both exist here.
+export async function searchText({
+  textQuery,
+  lat,
+  lng,
+  radiusMeters,
+  categorySlug,
+  openNow = false,
+  includedType,
+}: {
+  textQuery: string;
+  lat: number;
+  lng: number;
+  radiusMeters: number;
+  categorySlug: string;
+  openNow?: boolean;
+  includedType?: string;
+}): Promise<GooglePlaceResult[]> {
+  const places = await callGoogle('searchText', {
+    textQuery,
+    pageSize: 20,
+    // Bias (not restrict): a brand may legitimately sit just outside the
+    // radius, and returning it ranked by distance beats returning nothing.
+    locationBias: {
+      circle: { center: { latitude: lat, longitude: lng }, radius: radiusMeters },
+    },
+    rankPreference: 'DISTANCE',
+    languageCode: 'ar',
+    ...(openNow ? { openNow: true } : {}),
+    ...(includedType ? { includedType } : {}),
+  });
+  return places.map((p: any) => mapPlace(p, categorySlug));
 }
 
 export async function searchNearby({
@@ -94,43 +197,15 @@ export async function searchNearby({
   if (!includedTypes) {
     throw new Error(`no_google_type_for_category:${categorySlug}`);
   }
-  const apiKey = process.env.GOOGLE_PLACES_API_KEY;
-  if (!apiKey) {
-    throw new Error('google_places_not_configured');
-  }
 
-  const response = await fetch('https://places.googleapis.com/v1/places:searchNearby', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Goog-Api-Key': apiKey,
-      'X-Goog-FieldMask': FIELD_MASK,
+  const places = await callGoogle('searchNearby', {
+    includedTypes,
+    maxResultCount: 20,
+    languageCode: 'ar',
+    locationRestriction: {
+      circle: { center: { latitude: lat, longitude: lng }, radius: radiusMeters },
     },
-    body: JSON.stringify({
-      includedTypes,
-      maxResultCount: 20,
-      locationRestriction: {
-        circle: { center: { latitude: lat, longitude: lng }, radius: radiusMeters },
-      },
-    }),
   });
 
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`google_places_error:${response.status}:${text.slice(0, 200)}`);
-  }
-
-  const data = await response.json();
-  const places = data.places || [];
-
-  return places.map((p: any) => ({
-    sourceId: p.id,
-    name: p.displayName?.text ?? 'Unknown',
-    categorySlug,
-    location: { type: 'Point', coordinates: [p.location.longitude, p.location.latitude] },
-    priceLevel: PRICE_LEVEL_MAP[p.priceLevel] || null,
-    rating: typeof p.rating === 'number' ? p.rating : null,
-    ratingCount: typeof p.userRatingCount === 'number' ? p.userRatingCount : null,
-    enrichmentSource: 'google',
-  }));
+  return places.map((p: any) => mapPlace(p, categorySlug));
 }

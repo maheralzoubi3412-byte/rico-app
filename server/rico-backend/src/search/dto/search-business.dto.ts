@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { IsIn, IsLatitude, IsLongitude, IsNumber, IsOptional, IsString, Max, Min } from 'class-validator';
+import { IsIn, IsLatitude, IsLongitude, IsNumber, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 
 export class SearchBusinessDto {
   @Type(() => Number)
@@ -22,8 +22,22 @@ export class SearchBusinessDto {
   categorySlug?: string;
 
   @IsOptional()
-  @IsIn(['nearest', 'cheapest', 'best_rated'])
+  @IsIn(['nearest', 'cheapest', 'open_now', 'best_rated'])
   rank?: string = 'nearest';
+
+  /// Brand/place name the user named explicitly ("ستاربكس") — routes the
+  /// Google fallback to Text Search, which can actually match a name.
+  @IsOptional()
+  @IsString()
+  @MaxLength(60)
+  brandHint?: string;
+
+  /// Arabic label for a free-text category outside our fixed slugs (the
+  /// classifier's `other` case, e.g. "محل عطور") — used as the text query.
+  @IsOptional()
+  @IsString()
+  @MaxLength(60)
+  label?: string;
 
   @IsOptional()
   @Type(() => Number)

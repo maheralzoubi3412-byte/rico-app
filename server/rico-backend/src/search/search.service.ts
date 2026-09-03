@@ -7,12 +7,21 @@ import { EARTH_RADIUS_METERS, haversineMeters } from '../common/utils/geo.util';
 import { SearchBusinessDto } from './dto/search-business.dto';
 import { parseQuery } from './query-parser';
 import { ApiUsageService } from '../api-usage/api-usage.service';
+import { BusinessesService } from '../businesses/businesses.service';
 import {
   GOOGLE_PLACES_PROVIDER,
   DEFAULT_GOOGLE_PLACES_MONTHLY_CAP,
   GOOGLE_TYPE_BY_CATEGORY,
+  GooglePlaceResult,
   searchNearby,
+  searchText,
 } from '../integrations/google-places.adapter';
+
+// Businesses auto-cached from a live user search, as opposed to the ones an
+// admin deliberately sourced/onboarded. Both live in `businesses`, but only
+// curated ones may claim source:'rico' (which unlocks catalog + ordering in
+// the app) — an auto-cached row has no products behind it.
+const LIVE_CACHE_ENRICHMENT = 'google_live';
 
 interface SearchPlace {
   id: string;
@@ -24,11 +33,17 @@ interface SearchPlace {
   address: string | null;
   phone: string | null;
   openingHours: string | null;
+  /// true/false from Google; null when nobody could tell us.
+  openNow: boolean | null;
   priceLevel: number | null;
   rating: number | null;
   ratingCount: number | null;
   distanceMeters: number;
   source: 'rico' | 'google';
+}
+
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 function sortByRank(places: SearchPlace[], rank: string): void {
@@ -52,6 +67,7 @@ export class SearchService {
     @InjectModel(Business.name) private readonly businessModel: Model<BusinessDocument>,
     @InjectModel(Product.name) private readonly productModel: Model<ProductDocument>,
     private readonly apiUsageService: ApiUsageService,
+    private readonly businessesService: BusinessesService,
   ) {}
 
   // GET /search — ported from routes/search.js. Response shape must stay
@@ -68,6 +84,17 @@ export class SearchService {
 
     const filter: Record<string, unknown> = { isActive: true };
     if (dto.categorySlug) filter.categorySlug = dto.categorySlug;
+
+    // When the user named something specific — a brand ("ستاربكس") or a
+    // free-text category we have no slug for ("محل عطور") — the DB side must
+    // match that name too. Filtering by category alone would answer "أقرب
+    // ستاربكس" with any nearby cafe, and a label-only query (no category at
+    // all) would return whatever happens to sit nearby.
+    const nameNeedle = dto.brandHint ?? (dto.categorySlug ? undefined : dto.label);
+    if (nameNeedle) {
+      const re = new RegExp(escapeRegex(nameNeedle), 'i');
+      filter.$or = [{ name: re }, { nameAr: re }];
+    }
 
     let businesses;
     if (rank === 'nearest') {
@@ -94,7 +121,49 @@ export class SearchService {
       businesses = raw.slice(0, limit);
     }
 
-    let places: SearchPlace[] = businesses.map((b) => ({
+    let places: SearchPlace[] = businesses.map((b) => this.toSearchPlace(b, lat, lng));
+
+    // Our own DB coverage is necessarily partial (only businesses we've
+    // onboarded, synced, or auto-cached) — fill the shortfall from Google,
+    // the global fallback, while under the shared monthly budget.
+    if (places.length < limit) {
+      const fallback = await this.fetchGoogleFallback({
+        lat,
+        lng,
+        radiusMeters,
+        rank,
+        categorySlug: dto.categorySlug,
+        brandHint: dto.brandHint,
+        label: dto.label,
+        needed: limit - places.length,
+        seenBusinessIds: new Set(places.map((p) => p.id)),
+      });
+      places = [...places, ...fallback];
+    }
+
+    // An explicit "open now" request must not silently return closed places.
+    // Google-sourced results carry a real verdict; our own rows usually don't
+    // (openNow null), and dropping those would hide real partners, so they're
+    // kept — only the definitively-closed ones go.
+    if (rank === 'open_now') {
+      places = places.filter((p) => p.openNow !== false);
+    }
+
+    sortByRank(places, rank);
+    places = places.slice(0, limit);
+
+    // Never claim a ranking the data can't back up.
+    const priceDataAvailable = rank !== 'cheapest' || places.some((p) => p.priceLevel != null);
+    const ratingDataAvailable = rank !== 'best_rated' || places.some((p) => p.rating != null);
+    // Lets the client phrase "open now" honestly instead of asserting it for
+    // results nobody actually verified.
+    const openNowVerified = places.length > 0 && places.every((p) => p.openNow === true);
+
+    return { priceDataAvailable, ratingDataAvailable, openNowVerified, places };
+  }
+
+  private toSearchPlace(b: any, lat: number, lng: number): SearchPlace {
+    return {
       id: String(b._id),
       name: b.name,
       nameAr: b.nameAr,
@@ -104,38 +173,15 @@ export class SearchService {
       address: b.address,
       phone: b.phone,
       openingHours: b.openingHours,
+      openNow: null, // stored hours are free text; we don't guess from them
       priceLevel: b.priceLevel,
       rating: b.rating,
       ratingCount: b.ratingCount,
       distanceMeters: haversineMeters(lat, lng, b.location.coordinates[1], b.location.coordinates[0]),
-      source: 'rico',
-    }));
-
-    // Our own DB coverage is necessarily partial (only businesses we've
-    // onboarded/synced) — fill the shortfall from Google Places, the
-    // global fallback, but only for categories it maps to a known type and
-    // only while under the shared monthly budget (see ApiUsageService).
-    if (dto.categorySlug && places.length < limit && GOOGLE_TYPE_BY_CATEGORY[dto.categorySlug]) {
-      const seenBusinessIds = new Set(places.map((p) => p.id));
-      const fallback = await this.fetchGoogleFallback({
-        lat,
-        lng,
-        radiusMeters,
-        categorySlug: dto.categorySlug,
-        needed: limit - places.length,
-        seenBusinessIds,
-      });
-      places = [...places, ...fallback];
-    }
-
-    sortByRank(places, rank);
-    places = places.slice(0, limit);
-
-    // Never claim a ranking the data can't back up.
-    const priceDataAvailable = rank !== 'cheapest' || places.some((p) => p.priceLevel != null);
-    const ratingDataAvailable = rank !== 'best_rated' || places.some((p) => p.rating != null);
-
-    return { priceDataAvailable, ratingDataAvailable, places };
+      // Auto-cached rows are Google data wearing a Business document — they
+      // have no catalog, so they must not unlock ordering in the app.
+      source: b.enrichmentSource === LIVE_CACHE_ENRICHMENT ? 'google' : 'rico',
+    };
   }
 
   // Google Places is paid and capped monthly, shared with the admin
@@ -146,14 +192,20 @@ export class SearchService {
     lat,
     lng,
     radiusMeters,
+    rank,
     categorySlug,
+    brandHint,
+    label,
     needed,
     seenBusinessIds,
   }: {
     lat: number;
     lng: number;
     radiusMeters: number;
-    categorySlug: string;
+    rank: string;
+    categorySlug?: string;
+    brandHint?: string;
+    label?: string;
     needed: number;
     seenBusinessIds: Set<string>;
   }): Promise<SearchPlace[]> {
@@ -161,60 +213,84 @@ export class SearchService {
       ? Number(process.env.GOOGLE_PLACES_MONTHLY_CAP)
       : DEFAULT_GOOGLE_PLACES_MONTHLY_CAP;
     const usage = await this.apiUsageService.getUsage(GOOGLE_PLACES_PROVIDER);
-    if (usage.count >= cap) return [];
-
-    let results;
-    try {
-      results = await searchNearby({ lat, lng, radiusMeters, categorySlug });
-      await this.apiUsageService.increment(GOOGLE_PLACES_PROVIDER);
-    } catch {
+    if (usage.count >= cap) {
+      console.warn(`[search] Google Places skipped: ${usage.count}/${cap} used for ${usage.period}`);
       return [];
     }
 
+    // Nearby Search can't do brand names, free-text categories, or an
+    // open-now filter — Text Search can do all three, so anything that needs
+    // one of them routes there. Plain category browsing stays on Nearby,
+    // which returns tighter category matches.
+    const knownType = categorySlug ? GOOGLE_TYPE_BY_CATEGORY[categorySlug] : undefined;
+    const needsText = Boolean(brandHint) || rank === 'open_now' || !knownType;
+    const textQuery = brandHint || label || categorySlug;
+    if (needsText && !textQuery) return [];
+
+    let results: GooglePlaceResult[];
+    try {
+      results = needsText
+        ? await searchText({
+            textQuery: textQuery!,
+            lat,
+            lng,
+            radiusMeters,
+            categorySlug: categorySlug ?? 'other',
+            openNow: rank === 'open_now',
+            includedType: knownType?.[0],
+          })
+        : await searchNearby({ lat, lng, radiusMeters, categorySlug: categorySlug! });
+      await this.apiUsageService.increment(GOOGLE_PLACES_PROVIDER);
+    } catch (e) {
+      console.error('[search] Google Places call failed:', (e as Error).message || e);
+      return [];
+    }
+    if (results.length === 0) return [];
+
+    // One query for every Google id at once — the per-result findOne this
+    // replaced meant up to 20 sequential round-trips on a single search.
+    const existing = await this.businessModel
+      .find({
+        'sourceLinks.source': 'google',
+        'sourceLinks.sourceId': { $in: results.map((g) => g.sourceId) },
+        isActive: true,
+      })
+      .lean();
+    const existingBySourceId = new Map<string, any>();
+    for (const b of existing) {
+      for (const link of b.sourceLinks ?? []) {
+        if (link.source === 'google') existingBySourceId.set(link.sourceId, b);
+      }
+    }
+
     const places: SearchPlace[] = [];
+    const toCache: GooglePlaceResult[] = [];
+
     for (const g of results) {
       if (places.length >= needed) break;
-
-      // Already one of our real businesses (synced earlier via the admin
-      // Google-sourcing tool) — surface it with full catalog-backed data
-      // instead of the bare Google fields, same treatment as any other
-      // 'rico' result (skip it if the DB query above already returned it).
-      const matched = await this.businessModel
-        .findOne({ 'sourceLinks.source': 'google', 'sourceLinks.sourceId': g.sourceId, isActive: true })
-        .lean();
+      const matched = existingBySourceId.get(g.sourceId);
 
       if (matched) {
+        // Already ours: prefer the stored record (it may carry a catalog and
+        // curated Arabic name), but take Google's live open/closed verdict.
         if (seenBusinessIds.has(String(matched._id))) continue;
         seenBusinessIds.add(String(matched._id));
-        places.push({
-          id: String(matched._id),
-          name: matched.name,
-          nameAr: matched.nameAr,
-          categorySlug: matched.categorySlug,
-          lat: matched.location.coordinates[1],
-          lng: matched.location.coordinates[0],
-          address: matched.address,
-          phone: matched.phone,
-          openingHours: matched.openingHours,
-          priceLevel: matched.priceLevel,
-          rating: matched.rating,
-          ratingCount: matched.ratingCount,
-          distanceMeters: haversineMeters(lat, lng, matched.location.coordinates[1], matched.location.coordinates[0]),
-          source: 'rico',
-        });
+        places.push({ ...this.toSearchPlace(matched, lat, lng), openNow: g.openNow });
         continue;
       }
 
+      toCache.push(g);
       places.push({
         id: g.sourceId,
         name: g.name,
         nameAr: null,
-        categorySlug,
+        categorySlug: g.categorySlug,
         lat: g.location.coordinates[1],
         lng: g.location.coordinates[0],
-        address: null,
-        phone: null,
-        openingHours: null,
+        address: g.address,
+        phone: g.phone,
+        openingHours: g.openingHours,
+        openNow: g.openNow,
         priceLevel: g.priceLevel,
         rating: g.rating,
         ratingCount: g.ratingCount,
@@ -223,7 +299,29 @@ export class SearchService {
       });
     }
 
+    // Persist what we just paid for, so the next identical search is served
+    // from Mongo instead of buying the same places again. Fire-and-forget:
+    // the user's results are already assembled and must not wait on writes.
+    void this.cacheGooglePlaces(toCache);
+
     return places;
+  }
+
+  /// Stores freshly-fetched Google places as Business rows marked
+  /// [LIVE_CACHE_ENRICHMENT], so they're reused by the DB query next time but
+  /// never mistaken for a curated, catalog-backed partner.
+  private async cacheGooglePlaces(results: GooglePlaceResult[]): Promise<void> {
+    for (const g of results) {
+      try {
+        const { sourceId, ...rest } = g;
+        await this.businessesService.upsertBySource('google', sourceId, {
+          ...rest,
+          enrichmentSource: LIVE_CACHE_ENRICHMENT,
+        } as any);
+      } catch (e) {
+        console.error('[search] caching Google place failed:', (e as Error).message || e);
+      }
+    }
   }
 
   // GET /search/products — new rule-based product-catalog search (per the

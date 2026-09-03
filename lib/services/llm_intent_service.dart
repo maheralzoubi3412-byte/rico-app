@@ -96,53 +96,81 @@ class LlmIntentService {
   // Simulator/سطح المكتب) أو http://10.0.2.2:3000/classify (Android Emulator).
   static const String _proxyUrl = 'https://app.rico-go.com/classify';
 
+  /// مهلتان: الأولى قصيرة للخادم الصاحي، والثانية طويلة لأن فشل الأولى غالباً
+  /// معناه إن الخادم كان نايم (Render) وللتو بدأ يصحى — إيقاظه يحتاج ١٠-٢٠
+  /// ثانية. بدون المحاولة الثانية كان أول سؤال بعد فترة خمول يسقط دائماً
+  /// للمطابقة المحلية بالكلمات المفتاحية، فتُفهم "هلا" كطلب مطعم.
+  /// [BackendWarmup] يقلل احتمال الوصول للمحاولة الثانية أصلاً.
+  static const List<Duration> _attemptTimeouts = [Duration(seconds: 8), Duration(seconds: 25)];
+
   static Future<LlmClassification?> classify(
     String message, {
     List<Map<String, String>>? history,
     Map<String, dynamic>? lastResults,
   }) async {
-    try {
-      final response = await http
-          .post(
-            Uri.parse(_proxyUrl),
-            headers: {'Content-Type': 'application/json'},
-            body: jsonEncode({
-              'message': message,
-              if (history != null && history.isNotEmpty) 'history': history,
-              if (lastResults != null) 'lastResults': lastResults,
-            }),
-          )
-          .timeout(const Duration(seconds: 6));
+    final body = jsonEncode({
+      'message': message,
+      if (history != null && history.isNotEmpty) 'history': history,
+      if (lastResults != null) 'lastResults': lastResults,
+    });
 
-      if (response.statusCode != 200) return null;
-
-      final data = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
-
-      if (data['offTopic'] == true) {
-        return LlmClassification(isOffTopic: true, reply: data['reply'] as String?);
+    for (final timeout in _attemptTimeouts) {
+      try {
+        return _parse(await _post(body, timeout));
+      } on _UpstreamFailure {
+        // ردّ فعلي من الخادم بخطأ (مثل حد الاستخدام) — تكرار فوري ما يفيد.
+        return null;
+      } catch (_) {
+        // مهلة أو فشل شبكة: يستحق محاولة ثانية بمهلة أطول.
+        continue;
       }
-
-      final rawIntents = (data['intents'] as List?) ?? [];
-      if (rawIntents.isEmpty) return null;
-
-      final intents = rawIntents.map((raw) {
-        final map = raw as Map<String, dynamic>;
-        final customTag = map['customTag'] as Map<String, dynamic>?;
-        return ResolvedIntent(
-          kind: map['kind'] as String? ?? 'place',
-          category: map['category'] as String?,
-          rank: map['rank'] as String? ?? 'nearest',
-          brandHint: map['brandHint'] as String?,
-          customTagKey: customTag?['key'] as String?,
-          customTagValue: customTag?['value'] as String?,
-          label: map['label'] as String?,
-          referencedPosition: map['referencedPosition'] as int?,
-        );
-      }).toList();
-
-      return LlmClassification(isOffTopic: false, intents: intents);
-    } catch (_) {
-      return null;
     }
+    return null;
   }
+
+  static Future<http.Response> _post(String body, Duration timeout) => http
+      .post(
+        Uri.parse(_proxyUrl),
+        headers: {'Content-Type': 'application/json'},
+        body: body,
+      )
+      .timeout(timeout);
+
+  /// يرمي [_UpstreamFailure] إذا ردّ الخادم بخطأ فعلي (فلا معنى لإعادة
+  /// المحاولة فوراً)، ويرجع null إذا كان الرد سليماً لكن بلا نوايا صالحة.
+  static LlmClassification? _parse(http.Response response) {
+    if (response.statusCode != 200) throw const _UpstreamFailure();
+
+    final data = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+
+    if (data['offTopic'] == true) {
+      return LlmClassification(isOffTopic: true, reply: data['reply'] as String?);
+    }
+
+    final rawIntents = (data['intents'] as List?) ?? [];
+    if (rawIntents.isEmpty) return null;
+
+    final intents = rawIntents.map((raw) {
+      final map = raw as Map<String, dynamic>;
+      final customTag = map['customTag'] as Map<String, dynamic>?;
+      return ResolvedIntent(
+        kind: map['kind'] as String? ?? 'place',
+        category: map['category'] as String?,
+        rank: map['rank'] as String? ?? 'nearest',
+        brandHint: map['brandHint'] as String?,
+        customTagKey: customTag?['key'] as String?,
+        customTagValue: customTag?['value'] as String?,
+        label: map['label'] as String?,
+        referencedPosition: map['referencedPosition'] as int?,
+      );
+    }).toList();
+
+    return LlmClassification(isOffTopic: false, intents: intents);
+  }
+}
+
+/// ردّ خطأ من الخادم نفسه (حد استخدام، إعداد ناقص...) — يميّزه عن أخطاء
+/// الشبكة/المهلة اللي تستاهل محاولة ثانية.
+class _UpstreamFailure implements Exception {
+  const _UpstreamFailure();
 }

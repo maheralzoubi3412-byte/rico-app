@@ -18,7 +18,7 @@ class LocationService {
     final serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
       throw LocationException(
-        'خدمة الموقع مو مفعّلة بجهازك. فعّلها من الإعدادات وحاول مرة كمان.',
+        'خدمة الموقع مو مفعّلة في جهازك. فعّلها من الإعدادات وحاول مرة ثانية.',
         type: LocationErrorType.serviceDisabled,
       );
     }

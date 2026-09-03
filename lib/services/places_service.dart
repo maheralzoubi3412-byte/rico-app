@@ -18,9 +18,10 @@ class PlacesService {
   // المكتب) أو http://10.0.2.2:3000 (Android Emulator).
   static const String _ricoApiBaseUrl = 'https://app.rico-go.com';
 
-  /// [openNow] و[brandHint] غير مدعومين حالياً من الخادم (يحتاجان Google Text
-  /// Search بدل Nearby Search) — مقبولان هنا لتفادي تعديل نداءات الاستدعاء،
-  /// لكنهما بلا أثر فعلي إلى أن تُضاف تلك القدرة.
+  /// [label] اسم عربي قصير للفئة الحرة (نتيجة تصنيف "other" بلا slug ثابت) —
+  /// الخادم يستخدمه كنص بحث في Google Text Search، فتشتغل الفئات اللي ما لها
+  /// slug عندنا. و[brandHint] و[openNow] كذلك يمرّان للخادم لأن Text Search
+  /// يدعم البحث بالاسم والفلترة على المفتوح الحين (Nearby Search ما يدعمهما).
   Future<List<PlaceResult>> search({
     required double userLat,
     required double userLng,
@@ -29,29 +30,35 @@ class PlacesService {
     bool bestRated = false,
     String? brandHint,
     String? categorySlug,
+    String? label,
     int radiusMeters = 3000,
   }) async {
-    // فئة حرة (customTag/"other" بلا slug ثابت) لا مقابل لها بعد في تصنيف
-    // Google الثابت (GOOGLE_TYPE_BY_CATEGORY) ولا في قاعدتنا المصنّفة بـslug.
-    if (categorySlug == null) return [];
+    // بلا فئة ولا اسم ولا وصف ما فيه شي نبحث فيه أصلاً.
+    if (categorySlug == null && brandHint == null && label == null) return [];
 
     final uri = Uri.parse('$_ricoApiBaseUrl/search').replace(queryParameters: {
       'lat': '$userLat',
       'lng': '$userLng',
       'radius': '$radiusMeters',
-      'categorySlug': categorySlug,
-      'rank': bestRated ? 'best_rated' : (cheapest ? 'cheapest' : 'nearest'),
+      if (categorySlug != null) 'categorySlug': categorySlug,
+      if (brandHint != null) 'brandHint': brandHint,
+      if (label != null) 'label': label,
+      'rank': openNow
+          ? 'open_now'
+          : bestRated
+              ? 'best_rated'
+              : (cheapest ? 'cheapest' : 'nearest'),
     });
 
     http.Response response;
     try {
       response = await http.get(uri).timeout(const Duration(seconds: 8));
     } catch (_) {
-      throw PlacesException('ما قدرت أتصل بالإنترنت، تأكد من اتصالك وحاول مرة كمان.');
+      throw PlacesException('ما قدرت أتصل بالإنترنت، تأكد من اتصالك وحاول مرة ثانية.');
     }
 
     if (response.statusCode != 200) {
-      throw PlacesException('ما قدرت أوصل لخدمة الأماكن حالياً، حاول مرة كمان.');
+      throw PlacesException('ما قدرت أوصل لخدمة الأماكن الحين، حاول مرة ثانية.');
     }
 
     final data = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;

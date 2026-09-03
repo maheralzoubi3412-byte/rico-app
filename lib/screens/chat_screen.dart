@@ -5,6 +5,7 @@ import '../models/chat_message.dart';
 import '../models/deal.dart';
 import '../models/place_result.dart';
 import '../models/request_flow.dart';
+import '../services/backend_warmup.dart';
 import '../services/catalog_service.dart';
 import '../services/compose_service.dart';
 import '../services/deals_service.dart';
@@ -17,8 +18,10 @@ import '../services/request_service.dart';
 import '../services/search_gap_service.dart';
 import '../services/session_memory_service.dart';
 import '../theme/app_theme.dart';
+import '../widgets/chat_composer.dart';
+import '../widgets/chat_header.dart';
 import '../widgets/message_bubble.dart';
-import '../widgets/rico_logo_mark.dart';
+import '../widgets/welcome_hero.dart';
 import 'favorites_screen.dart';
 
 class ChatScreen extends StatefulWidget {
@@ -47,33 +50,42 @@ class _ChatScreenState extends State<ChatScreen> {
   Position? _cachedPosition;
   bool _sending = false;
 
+  /// هل نزل المستخدم عن أعلى المحادثة؟ يفعّل ظل الترويسة فقط عند الحاجة.
+  bool _headerElevated = false;
+
   @override
   void initState() {
     super.initState();
+    _scrollController.addListener(_onScroll);
+    // نوقظ الخادم من أول لحظة (ومرة ثانية عند بدء الكتابة) عشان يكون صاحياً
+    // وقت أول سؤال — وإلا تفشل مهلة التصنيف الذكي ويسقط الفهم للكلمات
+    // المفتاحية. انظر [BackendWarmup].
+    BackendWarmup.ping();
+    _controller.addListener(BackendWarmup.ping);
     _restoreConversation();
   }
 
+  @override
+  void dispose() {
+    _scrollController.removeListener(_onScroll);
+    _controller.removeListener(BackendWarmup.ping);
+    _scrollController.dispose();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    final elevated = _scrollController.hasClients && _scrollController.offset > 4;
+    if (elevated != _headerElevated) setState(() => _headerElevated = elevated);
+  }
+
   /// يستعيد آخر محادثة محفوظة محلياً (إن وُجدت ولم تنقض صلاحيتها) بدل بدء
-  /// محادثة جديدة كل مرة — وإلا يعرض رسالة الترحيب المعتادة.
+  /// محادثة جديدة كل مرة. عند عدم وجود محادثة تبقى القائمة فارغة فتظهر شاشة
+  /// الترحيب [WelcomeHero] بدل فقاعة ترحيب نصية طويلة.
   Future<void> _restoreConversation() async {
     final restored = await _sessionMemory.loadTranscript();
-    if (!mounted) return;
-    setState(() {
-      if (restored.isEmpty) {
-        _messages.add(ChatMessage(
-          text: 'أهلين 👋\n'
-              'فيك تسألني عن:\n'
-              '🍔 مطاعم قريبة\n'
-              '☕ كافيهات\n'
-              '🛍️ محلات\n'
-              '🔥 عروض وخصومات\n'
-              'أو قلي شو ببالك وأرتبها لك 👌',
-          sender: MessageSender.bot,
-        ));
-      } else {
-        _messages.addAll(restored);
-      }
-    });
+    if (!mounted || restored.isEmpty) return;
+    setState(() => _messages.addAll(restored));
     _scrollToBottom();
   }
 
@@ -221,7 +233,7 @@ class _ChatScreenState extends State<ChatScreen> {
       try {
         final deals = await _dealsService.fetchNearby(lat: origin.lat, lng: origin.lng);
         if (deals.isEmpty) {
-          return ChatMessage(text: 'ما لقيت عروض قريبة منك هلأ 😕', sender: MessageSender.bot);
+          return ChatMessage(text: 'ما لقيت عروض قريبة منك الحين 😕', sender: MessageSender.bot);
         }
         unawaited(_impressionService.trackItems(
           deals.map((d) => ImpressionItem(businessId: d.placeId, dealId: d.id)).toList(),
@@ -242,14 +254,14 @@ class _ChatScreenState extends State<ChatScreen> {
           history: _buildHistory(),
         );
         return ChatMessage(
-          text: composedReply ?? 'هاي أقرب العروض الموجودة:',
+          text: composedReply ?? 'هذي أقرب العروض المتوفرة لك:',
           sender: MessageSender.bot,
           deals: deals,
         );
       } on DealsException catch (e) {
         return ChatMessage(text: e.message, sender: MessageSender.bot);
       } catch (_) {
-        return ChatMessage(text: 'ما قدرت أجيب العروض هلأ 😕', sender: MessageSender.bot);
+        return ChatMessage(text: 'ما قدرت أجيب العروض الحين 😕', sender: MessageSender.bot);
       }
     }
 
@@ -262,6 +274,9 @@ class _ChatScreenState extends State<ChatScreen> {
         bestRated: intent.rank == RankMode.bestRated,
         brandHint: intent.brandHint,
         categorySlug: intent.slug,
+        // للفئات الحرة ("other") ما فيه slug ثابت — الاسم العربي هو نص البحث
+        // الوحيد المتاح، والخادم يمرره لـGoogle Text Search.
+        label: intent.slug == null ? intent.label : null,
       );
 
       if (places.isEmpty) {
@@ -271,7 +286,7 @@ class _ChatScreenState extends State<ChatScreen> {
           unawaited(_searchGapService.track(categorySlug: intent.slug!, lat: origin.lat, lng: origin.lng));
         }
         return ChatMessage(
-          text: 'ما لقيت ${intent.label} قريب منك هلأ 😕 جرّب توسّع نطاق البحث أو نوع تاني.',
+          text: 'ما لقيت ${intent.label} قريب منك الحين 😕 جرّب توسّع نطاق البحث أو نوع ثاني.',
           sender: MessageSender.bot,
         );
       }
@@ -317,28 +332,33 @@ class _ChatScreenState extends State<ChatScreen> {
       var introText = composedReply;
 
       if (introText == null) {
-        introText = 'هاي أقرب ${intent.label} لموقعك:';
+        introText = 'هذي أقرب ${intent.label} لموقعك:';
 
         if (intent.wantsCheapest) {
           introText = places.first.priceLevel != null
-              ? 'رتبتلك ${intent.label} من الأرخص للأغلى فعلياً حسب الأسعار:'
-              : 'رتبتلك أقرب ${intent.label} (الأقرب غالباً أوفر بسبب توفير وقت ومشوار):';
+              ? 'رتّبت لك ${intent.label} من الأرخص للأغلى حسب الأسعار الفعلية:'
+              : 'رتّبت لك أقرب ${intent.label} (الأقرب غالباً أوفر لأنك توفّر وقت ومشوار):';
         } else if (intent.rank == RankMode.bestRated) {
           introText = places.first.rating != null
-              ? 'رتبتلك ${intent.label} من الأعلى تقييم:'
-              : 'هاي أقرب ${intent.label} لموقعك (ما في بيانات تقييم كافية لسا):';
+              ? 'رتّبت لك ${intent.label} من الأعلى تقييماً:'
+              : 'هذي أقرب ${intent.label} لموقعك (ما فيه بيانات تقييم كافية للحين):';
         }
 
         if (intent.wantsOpenNow) {
-          final anyConfirmedOpen = places.any((p) => p.isOpenNow == true);
-          introText = anyConfirmedOpen
-              ? 'هاي أقرب ${intent.label} الفاتحة هلأ:'
-              : 'ما قدرت أتأكد من مواعيد الدوام بالظبط، بس هاي أقرب ${intent.label}:';
+          // ما ندّعي إنها كلها مفتوحة إلا إذا كل نتيجة فعلاً مؤكدة مفتوحة —
+          // النتائج اللي ما عندنا عنها بيانات دوام تبقى "ما قدرت أتأكد".
+          final allConfirmedOpen = places.every((p) => p.isOpenNow == true);
+          final someConfirmedOpen = places.any((p) => p.isOpenNow == true);
+          introText = allConfirmedOpen
+              ? 'هذي أقرب ${intent.label} المفتوحة الحين:'
+              : someConfirmedOpen
+                  ? 'هذي أقرب ${intent.label}، والمفتوح منها مؤشر عليه:'
+                  : 'ما قدرت أتأكد من مواعيد الدوام بالضبط، بس هذي أقرب ${intent.label}:';
         }
       }
 
       if (usedFallback) {
-        introText += '\n(ما قدرت أتأكد من نوع طلبك بالظبط، صحّحلي إذا ما كان هاد قصدك 🙂)';
+        introText += '\n(ما قدرت أتأكد من نوع طلبك بالضبط، صحّح لي إذا ما كان هذا قصدك 🙂)';
       }
 
       return ChatMessage(
@@ -352,7 +372,7 @@ class _ChatScreenState extends State<ChatScreen> {
     } on PlacesException catch (e) {
       return ChatMessage(text: e.message, sender: MessageSender.bot);
     } catch (_) {
-      return ChatMessage(text: 'صار خطأ مو متوقع، حاول مرة كمان 😕', sender: MessageSender.bot);
+      return ChatMessage(text: 'صار خطأ غير متوقع، حاول مرة ثانية 😕', sender: MessageSender.bot);
     }
   }
 
@@ -363,7 +383,7 @@ class _ChatScreenState extends State<ChatScreen> {
     setState(() {
       _messages.add(ChatMessage(text: text, sender: MessageSender.user));
       _messages.add(ChatMessage(
-          text: 'ريكو عم يدوّرلك هلأ...',
+          text: 'ريكو يدوّر لك الحين…',
           sender: MessageSender.bot,
           isLoading: true));
       _sending = true;
@@ -383,7 +403,7 @@ class _ChatScreenState extends State<ChatScreen> {
           _messages.removeLast(); // إزالة رسالة "يبحث..."
           _messages.add(ChatMessage(
             text: classification.reply ??
-                'أنا ريكو، مختص أساعدك تلاقي أقرب مطعم أو كافيه أو صيدلية وغيرها 😊 جرّب اسألني متل "أقرب مطعم".',
+                'أنا ريكو، أساعدك تلقى أقرب مطعم أو كافيه أو صيدلية وغيرها 😊 جرّب تسألني مثل «أقرب مطعم».',
             sender: MessageSender.bot,
           ));
         });
@@ -394,6 +414,20 @@ class _ChatScreenState extends State<ChatScreen> {
       var intents = classification?.toQueryIntents() ?? const <QueryIntent>[];
       final usedFallback = classification == null || intents.isEmpty;
       if (intents.isEmpty) {
+        // مصنّف الـLLM فشل أو ما رجّع أي نية (غالباً بسبب Cold start/شبكة
+        // بطيئة) — قبل التخمين المحلي بفئة، افحص إذا كانت الرسالة أصلاً
+        // تحية/شكر/دردشة عامة بلا أي إشارة لمكان أو عروض. بدون هالفحص كانت
+        // رسالة متل "هلا" ترجع بحث "مطعم" افتراضياً بدل رد بتحية طبيعية.
+        if (!IntentService.hasPlaceOrDealsSignal(text, lastCategorySlug: lastCategorySlug)) {
+          final offTopicReply = IntentService.detectOffTopicReply(text);
+          if (offTopicReply != null) {
+            setState(() {
+              _messages.removeLast(); // إزالة رسالة "ريكو يدوّر لك الحين…"
+              _messages.add(ChatMessage(text: offTopicReply, sender: MessageSender.bot));
+            });
+            return;
+          }
+        }
         intents = IntentService.parseMulti(text, lastCategorySlug: lastCategorySlug);
       }
 
@@ -407,8 +441,8 @@ class _ChatScreenState extends State<ChatScreen> {
         for (final intent in intents)
           ChatMessage(
             text: intent.kind == IntentKind.deals
-                ? 'عم يشوف العروض القريبة...'
-                : 'عم يدوّر على ${intent.label}...',
+                ? 'أشوف العروض القريبة…'
+                : 'أدوّر على ${intent.label}…',
             sender: MessageSender.bot,
             isLoading: true,
             understandingIntent: intent,
@@ -454,7 +488,7 @@ class _ChatScreenState extends State<ChatScreen> {
       if (origin.offerSaveHome && mounted) {
         setState(() {
           _messages.add(ChatMessage(
-            text: 'بدك أحفظ موقعك الحالي كـ"بيتي" عشان أستخدمه بطلباتك الجاية؟',
+            text: 'تبي أحفظ موقعك الحالي كـ«بيتي» عشان أستخدمه في طلباتك الجاية؟',
             sender: MessageSender.bot,
             actionLabel: 'احفظ موقعي كبيتي',
             onAction: () async {
@@ -462,7 +496,7 @@ class _ChatScreenState extends State<ChatScreen> {
               if (!mounted) return;
               setState(() {
                 _messages.add(ChatMessage(
-                  text: 'تمام ✅ حفظت موقعك كـ"بيتي".',
+                  text: 'تمام ✅ حفظت موقعك كـ«بيتي».',
                   sender: MessageSender.bot,
                 ));
               });
@@ -493,7 +527,7 @@ class _ChatScreenState extends State<ChatScreen> {
       setState(() {
         _messages.removeLast();
         _messages.add(ChatMessage(
-          text: 'صار خطأ ما كنت متوقعه، حاول مرة كمان 😕',
+          text: 'صار خطأ ما كنت متوقعه، حاول مرة ثانية 😕',
           sender: MessageSender.bot,
         ));
       });
@@ -513,27 +547,13 @@ class _ChatScreenState extends State<ChatScreen> {
     _handleSend();
   }
 
-  Widget _quickChip(String label) {
-    return ActionChip(
-      label: Text(label, style: const TextStyle(fontSize: 12.5, color: ChatColors.textPrimary)),
-      backgroundColor: ChatColors.card,
-      side: const BorderSide(color: ChatColors.borderSubtle),
-      onPressed: _sending
-          ? null
-          : () {
-              _controller.text = label;
-              _handleSend();
-            },
-    );
-  }
-
   /// يفتح تصفّح منتجات وعروض نشاط حقيقي (source == 'rico') تم اختياره من
   /// نتائج بحث فعلية — يجلبها من rico-backend ويعرضها كبطاقة قابلة للاختيار
   /// ضمن [RequestFlow]، بديلاً حقيقياً لتدفّق الطلب التجريبي القديم.
   Future<void> _openCatalog(PlaceResult place) async {
     final index = _messages.length;
     setState(() {
-      _messages.add(ChatMessage(text: 'عم يجهّز قائمة ${place.name}...', sender: MessageSender.bot, isLoading: true));
+      _messages.add(ChatMessage(text: 'أجهّز لك قائمة ${place.name}…', sender: MessageSender.bot, isLoading: true));
     });
     _scrollToBottom();
 
@@ -542,7 +562,7 @@ class _ChatScreenState extends State<ChatScreen> {
       if (catalog.isEmpty) {
         setState(() {
           _messages[index] = ChatMessage(
-            text: 'ما لقيت منتجات أو عروض موجودة لـ ${place.name} هلأ 😕',
+            text: 'ما لقيت منتجات أو عروض متوفرة لـ ${place.name} الحين 😕',
             sender: MessageSender.bot,
           );
         });
@@ -551,7 +571,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
       setState(() {
         _messages[index] = ChatMessage(
-          text: 'هاي منتجات وعروض ${place.name}، اختار يلي بيعجبك:',
+          text: 'هذي منتجات وعروض ${place.name}، اختر اللي يعجبك:',
           sender: MessageSender.bot,
           requestFlow: RequestFlow(catalog: catalog),
           onSelectCatalogItem: (type, id, label, detail) => _selectCatalogItem(index, type, id, label, detail),
@@ -562,7 +582,7 @@ class _ChatScreenState extends State<ChatScreen> {
     } on CatalogException catch (e) {
       setState(() => _messages[index] = ChatMessage(text: e.message, sender: MessageSender.bot));
     } catch (_) {
-      setState(() => _messages[index] = ChatMessage(text: 'ما قدرت أجيب المنتجات والعروض هلأ 😕', sender: MessageSender.bot));
+      setState(() => _messages[index] = ChatMessage(text: 'ما قدرت أجيب المنتجات والعروض الحين 😕', sender: MessageSender.bot));
     } finally {
       _scrollToBottom();
     }
@@ -639,7 +659,7 @@ class _ChatScreenState extends State<ChatScreen> {
         _messages[index] = latest.copyWith(
           requestFlow: latest.requestFlow!.copyWith(
             stage: RequestFlowStage.confirming,
-            errorMessage: 'ما قدرت ابعت طلبك هلأ، حاول مرة كمان.',
+            errorMessage: 'ما قدرت أرسل طلبك الحين، حاول مرة ثانية.',
           ),
         );
       });
@@ -650,137 +670,51 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Directionality(
-      textDirection: TextDirection.rtl,
-      child: Scaffold(
-        backgroundColor: ChatColors.background,
-        appBar: AppBar(
-          backgroundColor: ChatColors.background,
-          elevation: 0,
-          iconTheme: const IconThemeData(color: ChatColors.textPrimary),
-          title: Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  const Text('ريكو',
-                      style: TextStyle(color: ChatColors.textPrimary, fontWeight: FontWeight.bold, fontSize: 16)),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Text('متصل الآن', style: TextStyle(color: ChatColors.textMuted, fontSize: 11)),
-                      const SizedBox(width: 5),
-                      Container(
-                        width: 6,
-                        height: 6,
-                        decoration: const BoxDecoration(color: ChatColors.accentBright, shape: BoxShape.circle),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-              const SizedBox(width: 10),
-              Container(
-                width: 40,
-                height: 40,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: const Color(0xFF101B2A),
-                  shape: BoxShape.circle,
-                  border: Border.all(color: ChatColors.accentBright.withValues(alpha: 0.35)),
-                ),
-                child: const RicoLogoMark(height: 20, color: Colors.white),
-              ),
-            ],
-          ),
-          actions: [
-            IconButton(
-              icon: const Icon(Icons.bookmark_border),
-              tooltip: 'المفضّلة',
-              onPressed: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const FavoritesScreen()),
-                );
-              },
-            ),
-          ],
-        ),
-        body: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              child: Wrap(
-                alignment: WrapAlignment.end,
-                spacing: 8,
-                runSpacing: 4,
-                children: [
-                  _quickChip('أقرب مطعم'),
-                  _quickChip('أرخص كافيه'),
-                  _quickChip('أقرب صيدلية'),
-                  _quickChip('أقرب فندق'),
-                  _quickChip('أقرب محطة بنزين'),
-                ],
-              ),
-            ),
-            Expanded(
-              child: ListView.builder(
-                controller: _scrollController,
-                padding: const EdgeInsets.only(top: 8, bottom: 8),
-                itemCount: _messages.length,
-                itemBuilder: (context, index) =>
-                    MessageBubble(message: _messages[index]),
-              ),
-            ),
-            SafeArea(
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                decoration: const BoxDecoration(
-                  color: ChatColors.background,
-                  border: Border(top: BorderSide(color: ChatColors.borderSubtle)),
-                ),
-                child: Row(
-                  children: [
-                    InkWell(
-                      onTap: _handleSend,
-                      borderRadius: BorderRadius.circular(22),
-                      child: Container(
-                        width: 44,
-                        height: 44,
-                        decoration: const BoxDecoration(color: ChatColors.accent, shape: BoxShape.circle),
-                        child: const Icon(Icons.send, color: Color(0xFF04140A), size: 20),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: TextField(
-                        controller: _controller,
-                        textAlign: TextAlign.right,
-                        style: const TextStyle(color: ChatColors.textPrimary),
-                        cursorColor: ChatColors.accentBright,
-                        onSubmitted: (_) => _handleSend(),
-                        decoration: InputDecoration(
-                          hintText: 'اكتب طلبك... مثل "أقرب مطعم"',
-                          hintStyle: const TextStyle(color: ChatColors.hintText),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(AppRadii.input),
-                            borderSide: BorderSide.none,
-                          ),
-                          filled: true,
-                          fillColor: ChatColors.composer,
-                          contentPadding:
-                              const EdgeInsets.symmetric(horizontal: 16),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
+    // محادثة فارغة (جلسة جديدة أو انقضت صلاحية المحفوظة) = شاشة الهوية
+    // والاقتراحات، لا قائمة رسائل فيها فقاعة ترحيب وحيدة.
+    final showWelcome = _messages.isEmpty;
+
+    return Scaffold(
+      backgroundColor: RicoColors.canvas,
+      appBar: ChatHeader(
+        elevated: _headerElevated && !showWelcome,
+        onOpenFavorites: () => Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const FavoritesScreen()),
         ),
       ),
+      body: Column(
+        children: [
+          Expanded(
+            child: showWelcome
+                ? WelcomeHero(onPickSuggestion: _sendQuickReply)
+                : ListView.builder(
+                    controller: _scrollController,
+                    padding: const EdgeInsets.only(top: 14, bottom: 16),
+                    itemCount: _messages.length,
+                    itemBuilder: (context, index) => MessageBubble(
+                      message: _messages[index],
+                      showAvatar: _startsBotGroup(index),
+                    ),
+                  ),
+          ),
+          ChatComposer(
+            controller: _controller,
+            onSend: _handleSend,
+            busy: _sending,
+            // شريط الاقتراحات يفيد في المحادثة الجارية؛ شاشة الترحيب تعرض
+            // اقتراحاتها الخاصة بمساحة أوسع، فلا داعي لتكرارها.
+            suggestions: showWelcome ? null : SuggestionRail(onPick: _sendQuickReply),
+          ),
+        ],
+      ),
     );
+  }
+
+  /// أول رسالة من ريكو في سلسلة رسائله المتتالية — هي وحدها تحمل صورته، فلا
+  /// تتكرر الأيقونة في كل سطر من ردٍّ واحد وصل على عدة فقاعات.
+  bool _startsBotGroup(int index) {
+    if (_messages[index].sender != MessageSender.bot) return false;
+    if (index == 0) return true;
+    return _messages[index - 1].sender != MessageSender.bot;
   }
 }

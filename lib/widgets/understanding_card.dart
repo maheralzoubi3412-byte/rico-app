@@ -1,64 +1,66 @@
 import 'package:flutter/material.dart';
 import '../services/intent_service.dart';
 import '../theme/app_theme.dart';
+import 'rico_surfaces.dart';
 
 /// بطاقة "فهمت طلبك" — تعرض وسوماً مشتقة فعلياً من [QueryIntent] فقط (لا وسوم
-/// وهمية مثل مناسبة/عدد أشخاص لأن المصنّف لا يستخرج هذه البيانات)، بالإضافة
-/// إلى خطوة عمل حقيقية أثناء تنفيذ البحث الفعلي.
+/// وهمية مثل المناسبة أو عدد الأشخاص، لأن المصنّف لا يستخرج هذه البيانات).
+/// وجودها يطمئن المستخدم أن طلبه فُهم كما قصده قبل وصول النتائج.
 class UnderstandingCard extends StatelessWidget {
   final QueryIntent intent;
 
   const UnderstandingCard({super.key, required this.intent});
 
-  static const Map<String, String> _categoryIcons = {
-    'restaurant': '🍽️',
-    'cafe': '☕',
-    'pharmacy': '💊',
-    'supermarket': '🛒',
-    'fuel': '⛽',
-    'mall': '🛍️',
-    'atm': '🏧',
-    'bank': '🏦',
-    'hospital': '🏥',
-    'clinic': '🩺',
-    'fitness_centre': '🏋️',
-    'hotel': '🏨',
-    'clothes': '👕',
-    'mobile_phone': '📱',
-    'electronics': '🔌',
-    'hairdresser': '💈',
-    'beauty': '💅',
-    'car_wash': '🚗',
-    'dentist': '🦷',
-    'mosque': '🕌',
-    'park': '🌳',
+  static const Map<String, IconData> _categoryIcons = {
+    'restaurant': Icons.restaurant_rounded,
+    'cafe': Icons.local_cafe_rounded,
+    'pharmacy': Icons.local_pharmacy_rounded,
+    'supermarket': Icons.local_grocery_store_rounded,
+    'fuel': Icons.local_gas_station_rounded,
+    'mall': Icons.storefront_rounded,
+    'atm': Icons.atm_rounded,
+    'bank': Icons.account_balance_rounded,
+    'hospital': Icons.local_hospital_rounded,
+    'clinic': Icons.medical_services_rounded,
+    'fitness_centre': Icons.fitness_center_rounded,
+    'hotel': Icons.hotel_rounded,
+    'clothes': Icons.checkroom_rounded,
+    'mobile_phone': Icons.smartphone_rounded,
+    'electronics': Icons.devices_other_rounded,
+    'hairdresser': Icons.content_cut_rounded,
+    'beauty': Icons.spa_rounded,
+    'car_wash': Icons.local_car_wash_rounded,
+    'dentist': Icons.medical_information_rounded,
+    'mosque': Icons.mosque_rounded,
+    'park': Icons.park_rounded,
   };
 
-  String get _categoryIcon =>
-      intent.kind == IntentKind.deals ? '🏷️' : (_categoryIcons[intent.slug] ?? '📍');
+  IconData get _categoryIcon => intent.kind == IntentKind.deals
+      ? Icons.local_offer_rounded
+      : (_categoryIcons[intent.slug] ?? Icons.place_rounded);
 
-  List<({String icon, String label})> get _tags {
+  List<({IconData icon, String label})> get _tags {
     if (intent.kind == IntentKind.deals) {
-      return [(icon: '🏷️', label: 'العروض القريبة')];
+      return [(icon: Icons.local_offer_rounded, label: 'العروض القريبة')];
     }
 
-    final tags = <({String icon, String label})>[
+    final tags = <({IconData icon, String label})>[
       (icon: _categoryIcon, label: intent.label),
     ];
 
     switch (intent.rank) {
       case RankMode.cheapest:
-        tags.add((icon: '💰', label: 'الأرخص'));
+        tags.add((icon: Icons.savings_rounded, label: 'الأرخص'));
       case RankMode.bestRated:
-        tags.add((icon: '⭐', label: 'الأعلى تقييماً'));
+        tags.add((icon: Icons.star_rounded, label: 'الأعلى تقييماً'));
       case RankMode.openNow:
-        tags.add((icon: '🕐', label: 'مفتوح الآن'));
+        tags.add((icon: Icons.schedule_rounded, label: 'مفتوح الحين'));
       case RankMode.nearest:
-        break;
+        tags.add((icon: Icons.near_me_rounded, label: 'الأقرب لك'));
     }
 
     if (intent.brandHint != null && intent.brandHint!.trim().isNotEmpty) {
-      tags.add((icon: '🏢', label: intent.brandHint!));
+      tags.add((icon: Icons.business_rounded, label: intent.brandHint!));
     }
 
     return tags;
@@ -66,52 +68,36 @@ class UnderstandingCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(top: 8),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: ChatColors.card,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: ChatColors.borderMedium),
-      ),
+    return RicoCard(
+      padding: const EdgeInsets.all(13),
+      shadow: RicoShadows.subtle,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.end,
             children: [
-              const Text('فهمت طلبك',
-                  style: TextStyle(color: ChatColors.textPrimary, fontWeight: FontWeight.bold, fontSize: 13.5)),
-              const SizedBox(width: 8),
               Container(
                 width: 20,
                 height: 20,
-                decoration: const BoxDecoration(color: ChatColors.accent, shape: BoxShape.circle),
-                child: const Icon(Icons.check, size: 13, color: Color(0xFF04140A)),
+                alignment: Alignment.center,
+                decoration: const BoxDecoration(color: RicoColors.primary, shape: BoxShape.circle),
+                child: const Icon(Icons.check_rounded, size: 13, color: Colors.white),
               ),
+              const SizedBox(width: 8),
+              const Text('فهمت طلبك', style: RicoText.labelStrong),
             ],
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 11),
           Wrap(
-            alignment: WrapAlignment.end,
-            spacing: 8,
-            runSpacing: 8,
-            children: [for (final tag in _tags) _tagChip(tag.icon, tag.label)],
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              for (final tag in _tags)
+                MetaChip(icon: tag.icon, label: tag.label, tone: RicoColors.primaryDeep),
+            ],
           ),
         ],
       ),
-    );
-  }
-
-  Widget _tagChip(String icon, String label) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: const Color(0x0FFFFFFF),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: ChatColors.borderMedium),
-      ),
-      child: Text('$icon $label', style: const TextStyle(color: ChatColors.textPrimary, fontSize: 12.5)),
     );
   }
 }
