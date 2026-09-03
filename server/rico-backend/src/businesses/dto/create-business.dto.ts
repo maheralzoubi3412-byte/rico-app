@@ -1,4 +1,4 @@
-import { IsIn, IsLatitude, IsLongitude, IsNumber, IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsIn, IsLatitude, IsLongitude, IsInt, IsNumber, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 import { CATEGORIES } from '../../classify/constants/classify.constants';
 
 // Derived from the classifier's category list so a business can always be
@@ -24,6 +24,15 @@ export class CreateBusinessDto {
   @IsOptional()
   @IsString()
   placeId?: string;
+
+  // مفتاح إلغاء التكرار لمصدر خارجي (google/partner). لازم يكون حقلاً حقيقياً
+  // على الـDTO: تمريره سابقاً كنوع متقاطع (`CreateBusinessDto & { sourceId?: string }`)
+  // في المتحكّم جعل TypeScript يُصدر `design:paramtypes` = Object، وValidationPipe
+  // يتخطّى التحقق كلياً لهذا النوع — فما اشتغل أي مُتحقِّق على هذا المسار إطلاقاً.
+  @IsOptional()
+  @IsString()
+  @MaxLength(300)
+  sourceId?: string;
 
   @IsLatitude()
   lat: number;
@@ -52,14 +61,19 @@ export class CreateBusinessDto {
   openingHours?: string;
 
   @IsOptional()
-  @IsNumber()
+  @IsInt()
+  @Min(1)
+  @Max(4)
   priceLevel?: number;
 
   @IsOptional()
   @IsNumber()
+  @Min(0)
+  @Max(5)
   rating?: number;
 
   @IsOptional()
-  @IsNumber()
+  @IsInt()
+  @Min(0)
   ratingCount?: number;
 }

@@ -11,6 +11,34 @@ export function createAuthedFetch(onUnauthorized) {
   };
 }
 
+// يقرأ رسالة الخطأ الحقيقية من رد الخادم بدل عرض نص عام. الخادم يرد الآن
+// بـ{error, fields?, requestId} من AllExceptionsFilter، وrequestId يطابق سطر
+// السجل — فيصير بلاغ المستخدم قابلاً للتتبّع بدل "تعذر ..." بلا معلومة.
+const ERROR_LABELS = {
+  validation_failed: 'بيانات غير صحيحة',
+  invalid_value: 'قيمة غير صحيحة',
+  invalid_coordinates: 'الإحداثيات خارج المدى المسموح',
+  already_exists: 'السجل موجود مسبقاً',
+  unauthorized: 'انتهت الجلسة، سجّل الدخول من جديد',
+};
+
+export async function errorMessage(res, fallback) {
+  if (!res) return fallback;
+  let body = null;
+  try {
+    body = await res.json();
+  } catch {
+    return fallback;
+  }
+  if (!body || typeof body !== 'object') return fallback;
+
+  const label = ERROR_LABELS[body.error] || body.message || body.error || fallback;
+  const fields = body.fields && typeof body.fields === 'object' ? Object.keys(body.fields) : [];
+  const detail = fields.length ? ` (${fields.join('، ')})` : '';
+  const ref = body.requestId ? ` — مرجع: ${String(body.requestId).slice(0, 8)}` : '';
+  return `${label}${detail}${ref}`;
+}
+
 export const CATEGORY_LABELS = {
   restaurant: 'مطاعم',
   cafe: 'كافيهات',

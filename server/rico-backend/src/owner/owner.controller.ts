@@ -143,8 +143,11 @@ export class OwnerController {
 
   // ---- Sourcing (manual entry + Google sync) ----------------------------------
 
+  // ملاحظة: نوع الجسم لازم يكون صنف DTO مباشرةً لا نوعاً متقاطعاً — TypeScript
+  // يُصدر Object لأي نوع متقاطع، وValidationPipe يتخطّى Object كلياً، فيمرّ
+  // الجسم بلا تحقق ولا تنقية. sourceId صار حقلاً على CreateBusinessDto نفسه.
   @Post('sourcing/businesses')
-  createBusiness(@Body() dto: CreateBusinessDto & { sourceId?: string }) {
+  createBusiness(@Body() dto: CreateBusinessDto) {
     return this.ownerService.createManualBusiness(dto);
   }
 

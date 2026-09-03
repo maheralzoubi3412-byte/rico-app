@@ -1,5 +1,29 @@
 import { useState, useEffect } from 'react';
-import { CATEGORY_LABELS, DEAL_TYPES } from './api';
+import { CATEGORY_LABELS, DEAL_TYPES, errorMessage } from './api';
+
+// لوحة المفاتيح العربية تُدخل الفاصل العشري كـ"٫" (U+066B) أو "," وحقل
+// type="number" يرفضهما بصمت، فتصل "35.886" كـ"35886" — وهذا بالضبط ما حوّل
+// خط طول 35.8862959 إلى 358862959 ورفضته Mongo عند الكتابة برد 500 غامض.
+// نطبّع الأرقام العربية-الهندية والفواصل العشرية قبل التحليل، ثم نفحص المدى.
+const ARABIC_INDIC_ZERO = 0x0660;
+
+function normalizeNumeric(raw) {
+  return String(raw ?? '')
+    .trim()
+    .replace(/[\u0660-\u0669]/g, (d) => String(d.charCodeAt(0) - ARABIC_INDIC_ZERO))
+    .replace(/[\u066B,\u060C]/g, '.')
+    .replace(/\u066C/g, ''); // فاصل الآلاف العربي
+}
+
+function parseCoordinate(raw, { min, max }) {
+  const text = normalizeNumeric(raw);
+  // Number('') === 0، وصفر إحداثية صالحة تماماً — فلو مرّرنا الفراغ لـNumber
+  // لصار الحقل الفارغ نشاطاً على خط الاستواء بدل رسالة خطأ.
+  if (text === '') return null;
+  const value = Number(text);
+  if (!Number.isFinite(value) || value < min || value > max) return null;
+  return value;
+}
 
 const emptyBusinessForm = () => ({ name: '', nameAr: '', categorySlug: 'restaurant', lat: '', lng: '', city: '', phone: '' });
 const emptyDealForm = () => ({ businessId: '', titleAr: '', dealType: 'percent', value: '' });
@@ -29,20 +53,27 @@ export default function SourcingPanel({ authedFetch }) {
   async function submitBusiness(e) {
     e.preventDefault();
     setBusinessStatus(null);
+
+    const lat = parseCoordinate(businessForm.lat, { min: -90, max: 90 });
+    const lng = parseCoordinate(businessForm.lng, { min: -180, max: 180 });
+    if (lat === null || lng === null) {
+      setBusinessStatus({
+        type: 'error',
+        message: 'الإحداثيات غير صحيحة — خط العرض بين -90 و90، وخط الطول بين -180 و180 (مثال: 24.7136 و46.6753).',
+      });
+      return;
+    }
+
     const res = await authedFetch('/owner/sourcing/businesses', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        ...businessForm,
-        lat: parseFloat(businessForm.lat),
-        lng: parseFloat(businessForm.lng),
-      }),
+      body: JSON.stringify({ ...businessForm, lat, lng }),
     });
     if (res && res.ok) {
       setBusinessStatus({ type: 'success', message: 'تمت إضافة النشاط.' });
       setBusinessForm(emptyBusinessForm());
     } else {
-      setBusinessStatus({ type: 'error', message: 'تعذر إضافة النشاط.' });
+      setBusinessStatus({ type: 'error', message: await errorMessage(res, 'تعذر إضافة النشاط.') });
     }
   }
 
@@ -129,9 +160,9 @@ export default function SourcingPanel({ authedFetch }) {
             ))}
           </select>
           <label>خط العرض (lat)</label>
-          <input type="number" step="any" required value={businessForm.lat} onChange={(e) => setBusinessForm({ ...businessForm, lat: e.target.value })} />
+          <input type="text" inputMode="decimal" required placeholder="24.7136" value={businessForm.lat} onChange={(e) => setBusinessForm({ ...businessForm, lat: e.target.value })} />
           <label>خط الطول (lng)</label>
-          <input type="number" step="any" required value={businessForm.lng} onChange={(e) => setBusinessForm({ ...businessForm, lng: e.target.value })} />
+          <input type="text" inputMode="decimal" required placeholder="46.6753" value={businessForm.lng} onChange={(e) => setBusinessForm({ ...businessForm, lng: e.target.value })} />
           <label>المدينة (اختياري)</label>
           <input value={businessForm.city} onChange={(e) => setBusinessForm({ ...businessForm, city: e.target.value })} />
           <label>الهاتف (اختياري)</label>

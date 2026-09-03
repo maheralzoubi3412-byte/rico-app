@@ -56,6 +56,13 @@ const DEFAULT_MONTHLY_CAP = DEFAULT_GOOGLE_PLACES_MONTHLY_CAP;
 const DEFAULT_COOLDOWN_DAYS = 30;
 const COOLDOWN_RADIUS_METERS = 20000;
 
+// نموذج اللوحة يرسل الحقول الاختيارية غير المملوءة كسلاسل فارغة، و`?? null`
+// لا يعالج إلا null/undefined — فبدونها تُخزَّن '' وتُقرأ لاحقاً كقيمة موجودة.
+function blankToNull(value?: string | null): string | null {
+  const trimmed = (value ?? '').trim();
+  return trimmed === '' ? null : trimmed;
+}
+
 @Injectable()
 export class OwnerService {
   constructor(
@@ -77,18 +84,18 @@ export class OwnerService {
 
   // ---- Sourcing (manual entry + Google Places sync) ----------------------
 
-  async createManualBusiness(dto: CreateBusinessDto & { sourceId?: string }) {
+  async createManualBusiness(dto: CreateBusinessDto) {
     const sourceId = dto.sourceId || `manual:${dto.name}:${dto.lat},${dto.lng}`;
     const { business, created } = await this.businessesService.upsertBySource('manual', sourceId, {
       name: dto.name,
-      nameAr: dto.nameAr ?? null,
+      nameAr: blankToNull(dto.nameAr),
       categorySlug: dto.categorySlug,
       location: { type: 'Point', coordinates: [dto.lng, dto.lat] },
-      city: dto.city ?? null,
-      district: dto.district ?? null,
-      address: dto.address ?? null,
-      phone: dto.phone ?? null,
-      openingHours: dto.openingHours ?? null,
+      city: blankToNull(dto.city),
+      district: blankToNull(dto.district),
+      address: blankToNull(dto.address),
+      phone: blankToNull(dto.phone),
+      openingHours: blankToNull(dto.openingHours),
       priceLevel: dto.priceLevel ?? null,
       rating: dto.rating ?? null,
       ratingCount: dto.ratingCount ?? null,

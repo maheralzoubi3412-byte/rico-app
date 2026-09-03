@@ -4,6 +4,7 @@ import { ValidationPipe } from '@nestjs/common';
 import session from 'express-session';
 import MongoStore from 'connect-mongo';
 import { AppModule } from './app.module';
+import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -38,6 +39,11 @@ async function bootstrap() {
       },
     }),
   );
+
+  // يترجم أخطاء Mongoose/Mongo إلى 4xx مفهومة، ويرفق requestId بكل رد خطأ
+  // ليُطابَق بسطر السجل — بدونه كان أي استثناء غير HttpException يصل للعميل
+  // كـ500 فارغ لا يمكن تشخيصه من المتصفح.
+  app.useGlobalFilters(new AllExceptionsFilter());
 
   app.useGlobalPipes(
     new ValidationPipe({
