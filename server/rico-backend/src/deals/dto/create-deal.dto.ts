@@ -2,6 +2,7 @@ import { Type } from 'class-transformer';
 import {
   IsArray,
   IsIn,
+  IsInt,
   IsMongoId,
   IsNumber,
   IsObject,
@@ -41,10 +42,12 @@ export class CreateDealDto {
 
   @IsOptional()
   @Type(() => Number)
+  @IsInt()
   startsAt?: number;
 
   @IsOptional()
   @Type(() => Number)
+  @IsInt()
   endsAt?: number;
 
   @IsOptional()

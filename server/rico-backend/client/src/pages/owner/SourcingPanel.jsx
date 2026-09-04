@@ -26,7 +26,16 @@ function parseCoordinate(raw, { min, max }) {
 }
 
 const emptyBusinessForm = () => ({ name: '', nameAr: '', categorySlug: 'restaurant', lat: '', lng: '', city: '', phone: '' });
-const emptyDealForm = () => ({ businessId: '', titleAr: '', dealType: 'percent', value: '' });
+const emptyDealForm = () => ({
+  businessId: '',
+  businessName: '',
+  titleAr: '',
+  descriptionAr: '',
+  dealType: 'percent',
+  value: '',
+  promoCode: '',
+  endsAt: '',
+});
 const emptySyncForm = () => ({ lat: '', lng: '', categorySlug: 'restaurant', radiusMeters: '2000' });
 
 export default function SourcingPanel({ authedFetch }) {
@@ -35,6 +44,9 @@ export default function SourcingPanel({ authedFetch }) {
   const [businessStatus, setBusinessStatus] = useState(null);
   const [dealForm, setDealForm] = useState(emptyDealForm());
   const [dealStatus, setDealStatus] = useState(null);
+  const [businessQuery, setBusinessQuery] = useState('');
+  const [businessOptions, setBusinessOptions] = useState([]);
+  const [searchingBusinesses, setSearchingBusinesses] = useState(false);
   const [syncForm, setSyncForm] = useState(emptySyncForm());
   const [syncStatus, setSyncStatus] = useState(null);
   const [syncing, setSyncing] = useState(false);
@@ -43,6 +55,41 @@ export default function SourcingPanel({ authedFetch }) {
     loadUsage();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // منتقي النشاط: النموذج كان يطلب معرّف ObjectId من 24 خانة يدوياً — لا أحد
+  // يعرفه عن ظهر قلب، فكان إضافة عرض عملياً متعذّرة من اللوحة. البحث مؤجَّل
+  // 300ms حتى لا نطلق طلباً لكل حرف على رأس نهاية ثقيل (تجميعات إحصائية).
+  useEffect(() => {
+    const term = businessQuery.trim();
+    if (term.length < 2) {
+      setBusinessOptions([]);
+      return;
+    }
+    let cancelled = false;
+    setSearchingBusinesses(true);
+    const timer = setTimeout(async () => {
+      const res = await authedFetch(`/owner/businesses?limit=20&search=${encodeURIComponent(term)}`);
+      if (cancelled) return;
+      setSearchingBusinesses(false);
+      if (!res || !res.ok) {
+        setBusinessOptions([]);
+        return;
+      }
+      const data = await res.json();
+      if (!cancelled) setBusinessOptions(Array.isArray(data.items) ? data.items : []);
+    }, 300);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [businessQuery]);
+
+  function pickBusiness(business) {
+    setDealForm((f) => ({ ...f, businessId: business._id, businessName: business.nameAr || business.name }));
+    setBusinessQuery('');
+    setBusinessOptions([]);
+  }
 
   async function loadUsage() {
     const res = await authedFetch('/owner/sourcing/usage');
@@ -80,16 +127,48 @@ export default function SourcingPanel({ authedFetch }) {
   async function submitDeal(e) {
     e.preventDefault();
     setDealStatus(null);
+
+    if (!dealForm.businessId) {
+      setDealStatus({ type: 'error', message: 'اختر النشاط التجاري أولاً من البحث بالأعلى.' });
+      return;
+    }
+    // خصم بنسبة أو بمبلغ بلا قيمة يظهر في التطبيق كـ"خصم" مجرّد بلا رقم —
+    // نمنعه هنا بدل تخزين عرض ناقص المعنى.
+    if ((dealForm.dealType === 'percent' || dealForm.dealType === 'fixed') && dealForm.value === '') {
+      setDealStatus({ type: 'error', message: 'نوع العرض المختار يحتاج قيمة (نسبة الخصم أو المبلغ).' });
+      return;
+    }
+
+    // endsAt يُقرأ في الخادم بـnew Date(number)، فلازم epoch بالمللي ثانية.
+    // نأخذ آخر لحظة من اليوم المختار حتى يبقى العرض سارياً طوال ذلك اليوم.
+    let endsAt;
+    if (dealForm.endsAt !== '') {
+      const parsed = new Date(`${dealForm.endsAt}T23:59:59`);
+      if (Number.isNaN(parsed.getTime())) {
+        setDealStatus({ type: 'error', message: 'تاريخ انتهاء العرض غير صحيح.' });
+        return;
+      }
+      endsAt = parsed.getTime();
+    }
+
     const res = await authedFetch('/owner/sourcing/deals', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...dealForm, value: dealForm.value === '' ? undefined : Number(dealForm.value) }),
+      body: JSON.stringify({
+        businessId: dealForm.businessId,
+        titleAr: dealForm.titleAr,
+        descriptionAr: dealForm.descriptionAr === '' ? undefined : dealForm.descriptionAr,
+        dealType: dealForm.dealType,
+        value: dealForm.value === '' ? undefined : Number(dealForm.value),
+        promoCode: dealForm.promoCode === '' ? undefined : dealForm.promoCode.trim(),
+        endsAt,
+      }),
     });
     if (res && res.ok) {
-      setDealStatus({ type: 'success', message: 'تمت إضافة العرض.' });
+      setDealStatus({ type: 'success', message: 'تمت إضافة العرض — يظهر في التطبيق فوراً.' });
       setDealForm(emptyDealForm());
     } else {
-      setDealStatus({ type: 'error', message: 'تعذر إضافة العرض — تحقق من معرّف النشاط.' });
+      setDealStatus({ type: 'error', message: await errorMessage(res, 'تعذر إضافة العرض.') });
     }
   }
 
@@ -175,18 +254,64 @@ export default function SourcingPanel({ authedFetch }) {
       <div className="owner-wide-card">
         <h1 style={{ fontSize: 17 }}>إضافة عرض يدوياً</h1>
         <form onSubmit={submitDeal}>
-          <label>معرّف النشاط (businessId)</label>
-          <input required value={dealForm.businessId} onChange={(e) => setDealForm({ ...dealForm, businessId: e.target.value })} />
+          <label>النشاط التجاري</label>
+          {dealForm.businessId ? (
+            <div className="picked-business">
+              <span>{dealForm.businessName}</span>
+              <button
+                type="button"
+                onClick={() => setDealForm({ ...dealForm, businessId: '', businessName: '' })}
+              >
+                تغيير
+              </button>
+            </div>
+          ) : (
+            <>
+              <input
+                placeholder="ابحث باسم النشاط (حرفان على الأقل)"
+                value={businessQuery}
+                onChange={(e) => setBusinessQuery(e.target.value)}
+              />
+              {searchingBusinesses && <div className="picker-hint">جاري البحث…</div>}
+              {!searchingBusinesses && businessQuery.trim().length >= 2 && businessOptions.length === 0 && (
+                <div className="picker-hint">ما فيه نشاط بهذا الاسم — أضِفه أولاً من النموذج بالأعلى.</div>
+              )}
+              {businessOptions.length > 0 && (
+                <ul className="business-picker">
+                  {businessOptions.map((b) => (
+                    <li key={b._id}>
+                      <button type="button" onClick={() => pickBusiness(b)}>
+                        <strong>{b.nameAr || b.name}</strong>
+                        <small>{[CATEGORY_LABELS[b.categorySlug] || b.categorySlug, b.city].filter(Boolean).join(' · ')}</small>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </>
+          )}
           <label>عنوان العرض</label>
-          <input required maxLength={120} value={dealForm.titleAr} onChange={(e) => setDealForm({ ...dealForm, titleAr: e.target.value })} />
+          <input required maxLength={120} placeholder="خصم ٢٥٪ على القهوة المختصة" value={dealForm.titleAr} onChange={(e) => setDealForm({ ...dealForm, titleAr: e.target.value })} />
+          <label>تفاصيل العرض (اختياري)</label>
+          <input maxLength={300} placeholder="العرض ساري كل يوم من ٤ العصر إلى ٨ المساء" value={dealForm.descriptionAr} onChange={(e) => setDealForm({ ...dealForm, descriptionAr: e.target.value })} />
           <label>نوع العرض</label>
           <select value={dealForm.dealType} onChange={(e) => setDealForm({ ...dealForm, dealType: e.target.value })}>
             {DEAL_TYPES.map((t) => (
               <option key={t.value} value={t.value}>{t.label}</option>
             ))}
           </select>
-          <label>القيمة (اختياري)</label>
-          <input type="number" value={dealForm.value} onChange={(e) => setDealForm({ ...dealForm, value: e.target.value })} />
+          <label>
+            {dealForm.dealType === 'percent'
+              ? 'نسبة الخصم %'
+              : dealForm.dealType === 'fixed'
+                ? 'مبلغ الخصم (ر.س)'
+                : 'القيمة (اختياري)'}
+          </label>
+          <input type="number" step="any" min="0" value={dealForm.value} onChange={(e) => setDealForm({ ...dealForm, value: e.target.value })} />
+          <label>كود الخصم (اختياري)</label>
+          <input maxLength={40} placeholder="RICO25" value={dealForm.promoCode} onChange={(e) => setDealForm({ ...dealForm, promoCode: e.target.value })} />
+          <label>ينتهي بتاريخ (اختياري — بلا تاريخ يبقى سارياً)</label>
+          <input type="date" value={dealForm.endsAt} onChange={(e) => setDealForm({ ...dealForm, endsAt: e.target.value })} />
           <button className="full" type="submit">إضافة</button>
           {dealStatus && <div className={`status ${dealStatus.type}`}>{dealStatus.message}</div>}
         </form>
