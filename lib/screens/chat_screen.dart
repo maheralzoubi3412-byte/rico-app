@@ -17,6 +17,8 @@ import '../services/places_service.dart';
 import '../services/request_service.dart';
 import '../services/search_gap_service.dart';
 import '../services/session_memory_service.dart';
+import '../services/transcribe_service.dart';
+import '../services/voice_recording_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/chat_composer.dart';
 import '../widgets/chat_header.dart';
@@ -44,11 +46,16 @@ class _ChatScreenState extends State<ChatScreen> {
   final SearchGapService _searchGapService = SearchGapService();
   final CatalogService _catalogService = CatalogService();
   final RequestService _requestService = RequestService();
+  final TranscribeService _transcribeService = TranscribeService();
 
   static final RegExp _homeMention = RegExp('بيتي|منزلي|البيت');
 
   Position? _cachedPosition;
   bool _sending = false;
+
+  /// جارٍ تحويل مقطع صوتي إلى نص — يُعطّل المؤلّف كما يفعل [_sending]، لكنه
+  /// حالة مستقلة عنه لأنه يسبق الإرسال ولا يضيف فقاعة للمحادثة.
+  bool _transcribing = false;
 
   /// هل نزل المستخدم عن أعلى المحادثة؟ يفعّل ظل الترويسة فقط عند الحاجة.
   bool _headerElevated = false;
@@ -153,8 +160,12 @@ class _ChatScreenState extends State<ChatScreen> {
     final last = _findLastShown();
     if (last == null) return null;
     final items = last.places != null
-        ? [for (var j = 0; j < last.places!.length; j++) {'position': j + 1, 'name': last.places![j].name}]
-        : [for (var j = 0; j < last.deals!.length; j++) {'position': j + 1, 'name': last.deals![j].placeName}];
+        ? [
+            for (var j = 0; j < last.places!.length; j++) {'position': j + 1, 'name': last.places![j].name}
+          ]
+        : [
+            for (var j = 0; j < last.deals!.length; j++) {'position': j + 1, 'name': last.deals![j].placeName}
+          ];
     return {'label': last.label, 'items': items};
   }
 
@@ -382,10 +393,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
     setState(() {
       _messages.add(ChatMessage(text: text, sender: MessageSender.user));
-      _messages.add(ChatMessage(
-          text: 'ريكو يدوّر لك الحين…',
-          sender: MessageSender.bot,
-          isLoading: true));
+      _messages.add(ChatMessage(text: 'ريكو يدوّر لك الحين…', sender: MessageSender.bot, isLoading: true));
       _sending = true;
     });
     _controller.clear();
@@ -440,9 +448,7 @@ class _ChatScreenState extends State<ChatScreen> {
       final placeholders = [
         for (final intent in intents)
           ChatMessage(
-            text: intent.kind == IntentKind.deals
-                ? 'أشوف العروض القريبة…'
-                : 'أدوّر على ${intent.label}…',
+            text: intent.kind == IntentKind.deals ? 'أشوف العروض القريبة…' : 'أدوّر على ${intent.label}…',
             sender: MessageSender.bot,
             isLoading: true,
             understandingIntent: intent,
@@ -516,9 +522,8 @@ class _ChatScreenState extends State<ChatScreen> {
           actionLabel: e.type == LocationErrorType.unknown ? null : 'فتح الإعدادات',
           onAction: switch (e.type) {
             LocationErrorType.serviceDisabled => () => Geolocator.openLocationSettings(),
-            LocationErrorType.permissionDenied ||
-            LocationErrorType.permissionDeniedForever =>
-              () => Geolocator.openAppSettings(),
+            LocationErrorType.permissionDenied || LocationErrorType.permissionDeniedForever => () =>
+                Geolocator.openAppSettings(),
             LocationErrorType.unknown => null,
           },
         ));
@@ -536,6 +541,63 @@ class _ChatScreenState extends State<ChatScreen> {
       _scrollToBottom();
       unawaited(_sessionMemory.saveTranscript(_persistableMessages));
     }
+  }
+
+  /// يحوّل تسجيل المستخدم إلى نص ويحطه في حقل الكتابة — بلا إرسال تلقائي.
+  ///
+  /// النص يظهر للمستخدم قبل الإرسال عن قصد: تحويل الكلام باللهجة يخطئ أحياناً،
+  /// ونظرة سريعة على «أقرب صيدلية» قبل الضغط أرخص بكثير من بحث غلط + نداء
+  /// تصنيف مصروف على طلب ما قاله أصلاً.
+  Future<void> _handleRecorded(String filePath) async {
+    if (_transcribing || _sending) return;
+    setState(() => _transcribing = true);
+
+    // نفس منطق [BackendWarmup] مع الكتابة: مستخدم الصوت ما يكتب أبداً، فبدون
+    // هالنداء يوصل أول تسجيل لخادم نايم فيدفع زمن الإيقاظ فوق زمن التحويل.
+    BackendWarmup.ping();
+
+    try {
+      final result = await _transcribeService.transcribe(filePath);
+      if (!mounted) return;
+
+      switch (result.status) {
+        case TranscriptionStatus.ok:
+          _controller.text = result.text;
+          _controller.selection = TextSelection.collapsed(offset: result.text.length);
+        case TranscriptionStatus.noSpeech:
+          _showBotNote('ما سمعتك زين 🎙 قرّب الجوال شوي وجرّب مرة ثانية.');
+        case TranscriptionStatus.failed:
+          _showBotNote('ما قدرت أحوّل صوتك لنص الحين 😕 جرّب مرة ثانية أو اكتب طلبك.');
+      }
+    } finally {
+      // المقطع مرفوع وانتهى دوره — ما نخلي تسجيلات المستخدم قاعدة بالجهاز.
+      unawaited(VoiceRecordingService.deleteFile(filePath));
+      if (mounted) setState(() => _transcribing = false);
+    }
+  }
+
+  /// رُفض إذن المايك أو تعذّر تشغيله — نفس أسلوب رسائل الموقع: سبب مفهوم
+  /// وزر يوصل لمكان الحل بدل ما نترك المستخدم يدوّر بالإعدادات.
+  void _handleMicUnavailable() {
+    _showBotNote(
+      'محتاج إذن المايكروفون عشان أسمع طلبك 🎙',
+      actionLabel: 'فتح الإعدادات',
+      onAction: () => Geolocator.openAppSettings(),
+    );
+  }
+
+  /// ملاحظة قصيرة من ريكو داخل المحادثة (لا نتائج معها) — أنسب من SnackBar
+  /// لأن كل كلام ريكو الثاني يوصل كفقاعة.
+  void _showBotNote(String text, {String? actionLabel, VoidCallback? onAction}) {
+    setState(() {
+      _messages.add(ChatMessage(
+        text: text,
+        sender: MessageSender.bot,
+        actionLabel: actionLabel,
+        onAction: onAction,
+      ));
+    });
+    _scrollToBottom();
   }
 
   /// يُشغَّل من حبات الاقتراح السريع أسفل نتائج البحث (مثل "أبغى أرخص") —
@@ -582,7 +644,8 @@ class _ChatScreenState extends State<ChatScreen> {
     } on CatalogException catch (e) {
       setState(() => _messages[index] = ChatMessage(text: e.message, sender: MessageSender.bot));
     } catch (_) {
-      setState(() => _messages[index] = ChatMessage(text: 'ما قدرت أجيب المنتجات والعروض الحين 😕', sender: MessageSender.bot));
+      setState(() =>
+          _messages[index] = ChatMessage(text: 'ما قدرت أجيب المنتجات والعروض الحين 😕', sender: MessageSender.bot));
     } finally {
       _scrollToBottom();
     }
@@ -700,7 +763,9 @@ class _ChatScreenState extends State<ChatScreen> {
           ChatComposer(
             controller: _controller,
             onSend: _handleSend,
-            busy: _sending,
+            busy: _sending || _transcribing,
+            onRecorded: _handleRecorded,
+            onMicUnavailable: _handleMicUnavailable,
             // شريط الاقتراحات يفيد في المحادثة الجارية؛ شاشة الترحيب تعرض
             // اقتراحاتها الخاصة بمساحة أوسع، فلا داعي لتكرارها.
             suggestions: showWelcome ? null : SuggestionRail(onPick: _sendQuickReply),

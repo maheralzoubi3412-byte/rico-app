@@ -12,6 +12,7 @@ import { DealsModule } from './deals/deals.module';
 import { SearchModule } from './search/search.module';
 import { ClassifyModule } from './classify/classify.module';
 import { ComposeModule } from './compose/compose.module';
+import { TranscribeModule } from './transcribe/transcribe.module';
 import { AccountsModule } from './accounts/accounts.module';
 import { AuthModule } from './auth/auth.module';
 import { VendorModule } from './vendor/vendor.module';
@@ -36,6 +37,7 @@ import { SpaModule } from './spa/spa.module';
         '/deals*',
         '/classify*',
         '/compose*',
+        '/transcribe*',
         '/places/*',
         '/submit-deal*',
         '/impressions*',
@@ -57,6 +59,7 @@ import { SpaModule } from './spa/spa.module';
     SearchModule,
     ClassifyModule,
     ComposeModule,
+    TranscribeModule,
     MailerModule,
     AccountsModule,
     AuthModule,

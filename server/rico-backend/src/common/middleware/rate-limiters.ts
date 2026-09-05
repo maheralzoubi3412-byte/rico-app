@@ -32,3 +32,9 @@ export const submitDealLimiter = rateLimit({ windowMs: 60 * 60 * 1000, max: 20 }
 // a normal browsing session legitimately makes many more calls than a
 // one-off form submission — capped generously, just enough to blunt abuse.
 export const impressionLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 300 });
+
+// The only unauthenticated endpoint that spends money per call (Groq
+// speech-to-text), so it gets the tightest public cap. A real voice user
+// sends a handful of clips per session; 40 per 15 minutes is far past
+// normal use and still cheap if someone burns the whole window.
+export const transcribeLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 40 });
