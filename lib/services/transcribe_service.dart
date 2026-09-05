@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 
 /// نتيجة تحويل مقطع صوتي إلى نص.
 ///
@@ -38,7 +39,14 @@ class TranscribeService {
       if (!await file.exists()) return const TranscriptionResult(TranscriptionStatus.failed);
 
       final request = http.MultipartRequest('POST', Uri.parse(_url))
-        ..files.add(await http.MultipartFile.fromPath('audio', filePath));
+        ..files.add(await http.MultipartFile.fromPath(
+          'audio',
+          filePath,
+          // بدون تحديد صريح ترسل الحزمة application/octet-stream، وهو نوع لا
+          // يقول شيئاً عن الملف — نرسل نوع الحاوية الفعلي (m4a هي MP4) عشان
+          // الخادم وGroq يعرفان بأي فاكّ ترميز يفتحانه.
+          contentType: MediaType('audio', 'mp4'),
+        ));
 
       final streamed = await request.send().timeout(_timeout);
       final response = await http.Response.fromStream(streamed);

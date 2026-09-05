@@ -1,10 +1,21 @@
 import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import { isLikelySilence, STT_MODEL, STT_VOCAB_HINT } from './constants/transcribe.constants';
 
-// Containers Whisper accepts that a phone can realistically produce. The
-// client records aac-lc in m4a; the rest are here so a platform quirk in
-// the recorder's container choice doesn't turn into a 400 in the field.
-const ALLOWED_MIME_PREFIXES = ['audio/', 'video/mp4'];
+// What a phone can realistically send. The client records aac-lc in m4a,
+// but the Content-Type on a multipart upload is whatever the HTTP client
+// felt like putting there, so this is deliberately permissive:
+//
+// - 'application/octet-stream' is what Dart's MultipartFile.fromPath sends
+//   when no type is passed, and it's the generic default for most upload
+//   libraries. Rejecting it means rejecting the actual app.
+// - m4a legitimately arrives as audio/*, video/mp4 (it's an MP4 container)
+//   or video/3gpp depending on the platform.
+//
+// Whether the bytes are really decodable audio isn't knowable from a header
+// the client controls — Groq rejects genuinely bad audio, and the size cap
+// bounds the cost of finding out. This check only turns away uploads that
+// are declared as something clearly wrong (JSON, text, images).
+const ALLOWED_MIME_PREFIXES = ['audio/', 'video/mp4', 'video/3gpp', 'application/octet-stream'];
 
 @Injectable()
 export class TranscribeService {
@@ -28,7 +39,12 @@ export class TranscribeService {
     // Buffer's backing store is typed as ArrayBufferLike (possibly shared),
     // which BlobPart doesn't accept. The copy is bounded by MAX_AUDIO_BYTES.
     const bytes = new Uint8Array(audio.buffer);
-    form.append('file', new Blob([bytes], { type: mime }), audio.originalname || 'voice.m4a');
+    // Forward a concrete audio type rather than whatever generic default the
+    // client used — Groq picks its decoder from this, and 'octet-stream'
+    // tells it nothing. The filename extension carries the real format.
+    const filename = audio.originalname || 'voice.m4a';
+    const upstreamMime = mime.startsWith('application/') ? 'audio/mp4' : mime;
+    form.append('file', new Blob([bytes], { type: upstreamMime }), filename);
     form.append('model', STT_MODEL);
     // Rico is Saudi-only, and pinning the language stops Whisper from
     // "detecting" a heavily-accented clip as Farsi/Urdu and transliterating
