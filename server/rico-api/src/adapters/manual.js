@@ -87,7 +87,7 @@ function normalizeDeal(input) {
       descriptionAr: typeof input.descriptionAr === 'string' ? input.descriptionAr.trim() : null,
       dealType,
       value: input.value !== undefined && input.value !== null ? Number(input.value) : null,
-      currency: typeof input.currency === 'string' ? input.currency : 'SAR',
+      currency: typeof input.currency === 'string' ? input.currency : 'JOD',
       promoCode: typeof input.promoCode === 'string' ? input.promoCode : null,
       startsAt: input.startsAt !== undefined ? Number(input.startsAt) : null,
       endsAt: input.endsAt !== undefined ? Number(input.endsAt) : null,

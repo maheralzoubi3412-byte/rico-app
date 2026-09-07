@@ -21,7 +21,7 @@ class Deal {
     this.descriptionAr,
     required this.dealType,
     this.value,
-    this.currency = 'SAR',
+    this.currency = 'JOD',
     this.promoCode,
     this.distanceMeters,
     required this.source,
@@ -37,7 +37,7 @@ class Deal {
       descriptionAr: json['descriptionAr'] as String?,
       dealType: json['dealType'] as String,
       value: (json['value'] as num?)?.toDouble(),
-      currency: json['currency'] as String? ?? 'SAR',
+      currency: json['currency'] as String? ?? 'JOD',
       promoCode: json['promoCode'] as String?,
       distanceMeters: (json['distanceMeters'] as num?)?.toDouble(),
       source: json['source'] as String,
@@ -51,7 +51,7 @@ class Deal {
       case 'percent':
         return value != null ? 'خصم ${value!.toStringAsFixed(0)}٪' : 'خصم';
       case 'fixed':
-        return value != null ? 'خصم ${value!.toStringAsFixed(0)} $currency' : 'خصم';
+        return value != null ? 'خصم ${value!.toStringAsFixed(0)} $_currencyLabel' : 'خصم';
       case 'bogo':
         return 'اشتري واحد واحصل على الثاني مجاناً';
       case 'free_item':
@@ -60,6 +60,20 @@ class Deal {
         return 'عرض باقة';
       default:
         return 'عرض';
+    }
+  }
+
+  /// اسم العملة بالعربي — رمز ISO خام ("JOD") داخل جملة عربية يُقرأ كأنه
+  /// خطأ، والدينار الأردني هو الحالة الافتراضية الوحيدة عملياً. أي عملة
+  /// أخرى ترجع كما هي بدل أن نخترع لها اسماً.
+  String get _currencyLabel {
+    switch (currency) {
+      case 'JOD':
+        return 'دينار';
+      case 'SAR':
+        return 'ريال';
+      default:
+        return currency;
     }
   }
 

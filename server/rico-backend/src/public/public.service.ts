@@ -88,7 +88,7 @@ export class PublicService {
       descriptionAr: dto.descriptionAr?.trim(),
       dealType: dto.dealType,
       value: dto.value,
-      currency: 'SAR',
+      currency: 'JOD',
       promoCode: dto.promoCode?.trim(),
       source: 'partner_selfserve',
       status: 'pending_review',

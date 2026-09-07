@@ -167,7 +167,7 @@ async function upsertDeal(env, deal) {
       deal.descriptionAr ?? null,
       deal.dealType,
       deal.value ?? null,
-      deal.currency ?? 'SAR',
+      deal.currency ?? 'JOD',
       deal.promoCode ?? null,
       deal.startsAt ?? null,
       deal.endsAt ?? null,

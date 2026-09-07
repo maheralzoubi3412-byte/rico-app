@@ -488,11 +488,11 @@ class SuggestionRail extends StatelessWidget {
   static const List<({IconData icon, String label, String prompt})> _items = [
     (icon: Icons.restaurant_rounded, label: 'أقرب مطعم', prompt: 'أقرب مطعم'),
     (icon: Icons.local_cafe_rounded, label: 'أرخص كافيه', prompt: 'أرخص كافيه'),
-    (icon: Icons.local_offer_rounded, label: 'عروض قريبة', prompt: 'وش العروض القريبة؟'),
+    (icon: Icons.local_offer_rounded, label: 'عروض قريبة', prompt: 'شو العروض القريبة؟'),
     (icon: Icons.local_pharmacy_rounded, label: 'صيدلية', prompt: 'أقرب صيدلية'),
-    (icon: Icons.local_gas_station_rounded, label: 'بنزين', prompt: 'أقرب محطة بنزين'),
+    (icon: Icons.local_gas_station_rounded, label: 'كازية', prompt: 'أقرب كازية'),
     (icon: Icons.hotel_rounded, label: 'فندق', prompt: 'أقرب فندق'),
-    (icon: Icons.local_grocery_store_rounded, label: 'بقالة', prompt: 'أقرب بقالة'),
+    (icon: Icons.local_grocery_store_rounded, label: 'سوبرماركت', prompt: 'أقرب سوبرماركت'),
   ];
 
   @override

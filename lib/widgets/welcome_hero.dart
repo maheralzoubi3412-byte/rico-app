@@ -14,8 +14,8 @@ class WelcomeHero extends StatelessWidget {
   static const List<({IconData icon, String title, String prompt})> _suggestions = [
     (icon: Icons.restaurant_rounded, title: 'أقرب مطعم', prompt: 'أقرب مطعم'),
     (icon: Icons.local_cafe_rounded, title: 'أرخص كافيه', prompt: 'أرخص كافيه'),
-    (icon: Icons.local_offer_rounded, title: 'عروض قريبة', prompt: 'وش العروض القريبة؟'),
-    (icon: Icons.local_pharmacy_rounded, title: 'صيدلية فاتحة', prompt: 'أقرب صيدلية مفتوحة الحين'),
+    (icon: Icons.local_offer_rounded, title: 'عروض قريبة', prompt: 'شو العروض القريبة؟'),
+    (icon: Icons.local_pharmacy_rounded, title: 'صيدلية فاتحة', prompt: 'أقرب صيدلية فاتحة هلأ'),
   ];
 
   @override
@@ -74,7 +74,7 @@ class WelcomeHero extends StatelessWidget {
 }
 
 /// فاصل زخرفي — خطان متلاشيان بلون ذهبي حول معيّن صغير. اللمسة الذهبية هي
-/// ما يفصل الإحساس "المؤسسي السعودي" عن الأخضر الوظيفي وحده.
+/// ما يفصل الإحساس "المؤسسي" عن الأخضر الوظيفي وحده.
 class _GoldRule extends StatelessWidget {
   const _GoldRule();
 

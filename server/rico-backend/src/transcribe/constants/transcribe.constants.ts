@@ -4,15 +4,20 @@
 export const STT_MODEL = process.env.GROQ_STT_MODEL || 'whisper-large-v3-turbo';
 
 // Whisper accepts an optional `prompt` that biases decoding toward an
-// expected vocabulary. Rico's whole input space is "find me a nearby X" in
-// Saudi dialect, so seeding the category words and the brand names users
+// expected vocabulary. Tadallal's whole input space is "find me a nearby X" in
+// Jordanian dialect, so seeding the category words and the brand names users
 // actually say turns a lot of near-misses ("أقرب سيدلية") into exact
 // category matches the classifier can resolve.
+//
+// The brands are the Jordanian high street, not the Saudi one — a clip saying
+// "أقرب مناصير" has to decode as a fuel station, and leaving Saudi chains in
+// the hint biases decoding toward names nobody here says.
 export const STT_VOCAB_HINT =
-  'تدلل، أقرب مطعم، كافيه، قهوة، صيدلية، بقالة، سوبرماركت، محطة بنزين، فندق، ' +
+  'تدلل، أقرب مطعم، كافيه، قهوة، صيدلية، دكانة، سوبرماركت، محطة بنزين، فندق، ' +
   'صراف آلي، بنك، مستشفى، عيادة، نادي رياضي، مول، حلاق، مغسلة، ورشة سيارات، ' +
-  'عروض، خصومات، أرخص، أقرب، مفتوح الحين، أفضل تقييم، ' +
-  'ستاربكس، دانكن، البيك، كودو، هرفي، بنده، الدانوب، النهدي، الدواء';
+  'عروض، خصومات، أرخص، أقرب، فاتح هلأ، أحسن تقييم، ' +
+  'ستاربكس، كوستا، دانكن، مناصير، جوبترول، توتال، كارفور، سيفوي، سامح مول، ' +
+  'فارماسي ون، صيدليات العرب، حبيبة، زلاطيمو، أبو جبارة، ريم، زين، أورنج، أمنية';
 
 // Hard ceiling on the uploaded clip. The client caps recording at 30s of
 // 24kbps mono AAC (~90KB), so anything near this is not a Rico recording.

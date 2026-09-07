@@ -6,82 +6,85 @@ import { ProductsService } from '../src/products/products.service';
 import { DiscountsService } from '../src/discounts/discounts.service';
 import { DealsService } from '../src/deals/deals.service';
 
-// Riyadh-area coordinates, spread out enough to exercise radius/geo search.
+// Amman-area coordinates, spread out enough to exercise radius/geo search.
+// Prices are in JOD, so they look nothing like the old SAR figures — a
+// 12-dinar shawarma would be absurd, and the cheapest-first ranking is only
+// meaningful if the numbers are the ones a Jordanian user would recognise.
 const RESTAURANTS = [
   {
-    name: 'Al Baik Restaurant',
-    nameAr: 'مطعم البيك',
-    lat: 24.7136,
-    lng: 46.6753,
+    name: 'Abu Jbara',
+    nameAr: 'مطعم أبو جبارة',
+    lat: 31.9539,
+    lng: 35.9106,
     priceLevel: 1,
     rating: 4.5,
     ratingCount: 900,
     products: [
-      { name: 'Chicken Shawarma', nameAr: 'شاورما دجاج', price: 12, keywords: ['shawarma', 'شاورما', 'دجاج', 'chicken'], attributes: { spiceLevel: 'mild' } },
-      { name: 'Spicy Broasted', nameAr: 'بروستد حار', price: 18, keywords: ['broasted', 'بروستد', 'حار', 'spicy'], attributes: { spiceLevel: 'spicy' } },
+      { name: 'Chicken Shawarma', nameAr: 'شاورما دجاج', price: 1.5, keywords: ['shawarma', 'شاورما', 'دجاج', 'chicken'], attributes: { spiceLevel: 'mild' } },
+      { name: 'Spicy Broasted', nameAr: 'بروستد حار', price: 3.5, keywords: ['broasted', 'بروستد', 'حار', 'spicy'], attributes: { spiceLevel: 'spicy' } },
     ],
   },
   {
-    name: 'Najd Village',
-    nameAr: 'قرية نجد',
-    lat: 24.7255,
-    lng: 46.6199,
+    name: 'Sufra Restaurant',
+    nameAr: 'مطعم سفرة',
+    lat: 31.9700,
+    lng: 35.8600,
     priceLevel: 3,
     rating: 4.7,
     ratingCount: 620,
     products: [
-      { name: 'Grilled Mandi', nameAr: 'مندي مشوي', price: 45, keywords: ['mandi', 'مندي', 'مشوي', 'grilled'], attributes: {} },
+      { name: 'Mansaf', nameAr: 'منسف', price: 9, keywords: ['mansaf', 'منسف', 'لحمة', 'lamb'], attributes: {} },
     ],
   },
   {
     name: 'Cheap Eats Corner',
     nameAr: 'ركن الأكل الرخيص',
-    lat: 24.7011,
-    lng: 46.685,
+    lat: 31.9400,
+    lng: 35.9200,
     priceLevel: 1,
     rating: 3.9,
     ratingCount: 210,
     products: [
-      { name: 'Basic Shawarma', nameAr: 'شاورما اقتصادية', price: 7, keywords: ['shawarma', 'شاورما', 'رخيص', 'اقتصادي'], attributes: { spiceLevel: 'mild' } },
+      { name: 'Basic Shawarma', nameAr: 'شاورما اقتصادية', price: 1, keywords: ['shawarma', 'شاورما', 'رخيص', 'اقتصادي'], attributes: { spiceLevel: 'mild' } },
     ],
   },
   {
     name: 'Coffee Loft',
     nameAr: 'كوفي لوفت',
     categorySlug: 'cafe',
-    lat: 24.72,
-    lng: 46.63,
+    lat: 31.9800,
+    lng: 35.8900,
     priceLevel: 2,
     rating: 4.3,
     ratingCount: 340,
     products: [
-      { name: 'Iced Latte', nameAr: 'لاتيه مثلج', price: 22, keywords: ['latte', 'لاتيه', 'قهوة', 'coffee'], attributes: {} },
+      { name: 'Iced Latte', nameAr: 'لاتيه مثلج', price: 3, keywords: ['latte', 'لاتيه', 'قهوة', 'coffee'], attributes: {} },
     ],
   },
   {
     name: 'Threads Boutique',
     nameAr: 'بوتيك ثريدز',
     categorySlug: 'mall',
-    lat: 24.708,
-    lng: 46.66,
+    lat: 31.9600,
+    lng: 35.8700,
     priceLevel: 2,
     rating: 4.1,
     ratingCount: 88,
     products: [
-      { name: 'Black T-Shirt', nameAr: 'تيشيرت أسود', price: 35, keywords: ['tshirt', 'تيشيرت', 'اسود', 'black'], attributes: { color: 'black', size: 'medium' } },
-      { name: 'Cheap Black Tee', nameAr: 'تيشيرت أسود رخيص', price: 15, keywords: ['tshirt', 'تيشيرت', 'اسود', 'رخيص', 'black'], attributes: { color: 'black', size: 'large' } },
+      { name: 'Black T-Shirt', nameAr: 'تيشيرت أسود', price: 12, keywords: ['tshirt', 'تيشيرت', 'اسود', 'black'], attributes: { color: 'black', size: 'medium' } },
+      { name: 'Cheap Black Tee', nameAr: 'تيشيرت أسود رخيص', price: 5, keywords: ['tshirt', 'تيشيرت', 'اسود', 'رخيص', 'black'], attributes: { color: 'black', size: 'large' } },
     ],
   },
   {
-    name: 'Riyadh Grill House',
-    nameAr: 'بيت الشواء الرياض',
-    lat: 24.68,
-    lng: 46.71,
+    name: 'Amman Grill House',
+    nameAr: 'بيت الشواء عمان',
+    lat: 31.9300,
+    lng: 35.9300,
     priceLevel: 3,
     rating: 4.4,
     ratingCount: 505,
     products: [
-      { name: 'Mixed Grill', nameAr: 'مشاوي مشكلة', price: 55, keywords: ['grill', 'مشاوي', 'مشكلة'], attributes: {} },
+      { name: 'Mixed Grill', nameAr: 'مشاوي مشكلة', price: 11, keywords: ['grill', 'مشاوي', 'مشكلة'], attributes: {} },
     ],
   },
 ];
@@ -108,7 +111,7 @@ async function run() {
       categorySlug: (r as any).categorySlug ?? 'restaurant',
       lat: r.lat,
       lng: r.lng,
-      city: 'Riyadh',
+      city: 'Amman',
       priceLevel: r.priceLevel,
       rating: r.rating,
       ratingCount: r.ratingCount,
@@ -126,7 +129,7 @@ async function run() {
         attributes: p.attributes,
       } as any);
       createdProductIds.push(String(product._id));
-      console.log(`  product: ${p.name} (${product._id}) — ${p.price} SAR`);
+      console.log(`  product: ${p.name} (${product._id}) — ${p.price} JOD`);
     }
   }
 
@@ -136,8 +139,8 @@ async function run() {
     console.log(`discount: 20% off product ${createdProductIds[0]}`);
   }
   if (createdProductIds[2]) {
-    await discountsService.create({ productId: createdProductIds[2], type: 'fixed', value: 5 });
-    console.log(`discount: fixed 5 SAR product ${createdProductIds[2]}`);
+    await discountsService.create({ productId: createdProductIds[2], type: 'fixed', value: 1 });
+    console.log(`discount: fixed 1 JOD product ${createdProductIds[2]}`);
   }
 
   // A couple of place-level deals.

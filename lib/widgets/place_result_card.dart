@@ -128,7 +128,7 @@ class _PlaceResultCardState extends State<PlaceResultCard> {
               if (isOpen != null)
                 MetaChip(
                   icon: isOpen ? Icons.schedule_rounded : Icons.lock_clock,
-                  label: isOpen ? 'مفتوح الحين' : 'مغلق الحين',
+                  label: isOpen ? 'مفتوح الآن' : 'مغلق الآن',
                   tone: isOpen ? RicoColors.success : RicoColors.danger,
                 ),
             ],

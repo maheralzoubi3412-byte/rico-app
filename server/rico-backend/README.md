@@ -50,7 +50,7 @@ node scripts/start-dev-db.js   # prints a MONGODB_URI to put in .env, keep it ru
 npm run seed
 ```
 
-Creates ~7 Riyadh-area restaurants/cafes/a boutique (Arabic + English names), a handful of products with keywords in both languages, two active discounts, and two place-level deals — enough to exercise geo search, the rule-based product parser, and `/deals` immediately. Refuses to run against `NODE_ENV=production` unless you pass `--force`.
+Creates ~7 Amman-area restaurants/cafes/a boutique (Arabic + English names), a handful of products with keywords in both languages, two active discounts, and two place-level deals — enough to exercise geo search, the rule-based product parser, and `/deals` immediately. Refuses to run against `NODE_ENV=production` unless you pass `--force`.
 
 ## Example requests
 

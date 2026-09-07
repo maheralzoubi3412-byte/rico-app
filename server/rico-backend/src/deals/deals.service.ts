@@ -94,7 +94,7 @@ export class DealsService {
       descriptionAr: dto.descriptionAr ?? null,
       dealType: dto.dealType,
       value: dto.value ?? null,
-      currency: dto.currency ?? 'SAR',
+      currency: dto.currency ?? 'JOD',
       promoCode: dto.promoCode ?? null,
       startsAt: dto.startsAt !== undefined ? new Date(dto.startsAt) : null,
       endsAt: dto.endsAt !== undefined ? new Date(dto.endsAt) : null,

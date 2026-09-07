@@ -19,8 +19,8 @@ class RicoApp extends StatelessWidget {
       // العربية هي لغة التطبيق الوحيدة: تثبيتها هنا مع مُفوّضات الترجمة يجعل
       // الاتجاه RTL وكل نصوص ودجتس Material (قوائم النسخ/اللصق، التواريخ)
       // عربية تلقائياً، بدل تغليف كل شاشة بـ Directionality يدوياً.
-      locale: const Locale('ar', 'SA'),
-      supportedLocales: const [Locale('ar', 'SA'), Locale('ar')],
+      locale: const Locale('ar', 'JO'),
+      supportedLocales: const [Locale('ar', 'JO'), Locale('ar')],
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,

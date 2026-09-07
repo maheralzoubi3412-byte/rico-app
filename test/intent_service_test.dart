@@ -63,6 +63,13 @@ void main() {
         'بياناتي': 'خصوصية',
         'كم الساعة': 'برا الخدمة',
         'عندي محل': 'صاحب نشاط',
+        // الصيغ الأردنية للأسئلة نفسها
+        'شو رقمهم': 'تواصل أردني',
+        'كيف بوصل': 'اتجاهات أردني',
+        'إمتى يفتح': 'دوام أردني',
+        'في توصيل؟': 'توصيل أردني',
+        'بدي مساعدة': 'مساعدة أردني',
+        'ما بعرف شو بدي': 'مزاج غامض',
       };
       asks.forEach((ask, kind) {
         expect(route(ask), 'chat', reason: '$ask ($kind)');
@@ -80,10 +87,11 @@ void main() {
         final lastLine = reply.trim().split('\n').last;
         expect(
           lastLine.contains('؟') ||
+              lastLine.contains('احكي لي') ||
               lastLine.contains('قل لي') ||
               lastLine.contains('جرّب') ||
               lastLine.contains('اطلب') ||
-              lastLine.contains('أمرك'),
+              lastLine.contains('بدك'),
           isTrue,
           reason: 'رد "$ask" خلص بلا دعوة: $lastLine',
         );

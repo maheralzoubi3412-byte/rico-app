@@ -32,7 +32,7 @@ class RecommendedPickCard extends StatelessWidget {
             ? 'الأعلى تقييماً (${place.rating!.toStringAsFixed(1)}) ضمن ${intent.label} القريبة منك'
             : 'أفضل خيار متاح ضمن ${intent.label} القريبة منك';
       case RankMode.openNow:
-        return 'من أقرب ${intent.label} المتأكّد أنها مفتوحة الحين';
+        return 'من أقرب ${intent.label} المتأكّد أنها فاتحة هلأ';
       case RankMode.nearest:
         return 'الأقرب لموقعك الحالي ضمن ${intent.label}';
     }
@@ -101,7 +101,7 @@ class RecommendedPickCard extends StatelessWidget {
                     if (isOpen != null)
                       MetaChip(
                         icon: isOpen ? Icons.schedule_rounded : Icons.lock_clock,
-                        label: isOpen ? 'مفتوح الحين' : 'مغلق الحين',
+                        label: isOpen ? 'مفتوح الآن' : 'مغلق الآن',
                         tone: isOpen ? RicoColors.success : RicoColors.danger,
                       ),
                   ],

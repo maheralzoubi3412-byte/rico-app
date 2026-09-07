@@ -133,7 +133,7 @@ class MessageBubble extends StatelessWidget {
     );
   }
 
-  /// وقت بصيغة ١٢ ساعة بلاحقة عربية (ص/م) — أقرب لقراءة المستخدم السعودي من
+  /// وقت بصيغة ١٢ ساعة بلاحقة عربية (ص/م) — أقرب لقراءة المستخدم الأردني من
   /// AM/PM اللاتينية، وبلا تهيئة locale.
   static String _formatTime(DateTime t) {
     final hour12 = t.hour % 12 == 0 ? 12 : t.hour % 12;
@@ -251,19 +251,19 @@ class _PlacesResults extends StatelessWidget {
             runSpacing: 8,
             children: [
               ChatPillChip(
-                label: 'أبغى أرخص',
+                label: 'بدي أرخص',
                 icon: Icons.savings_rounded,
-                onTap: () => resolvedOnQuickReply('أبغى أرخص'),
+                onTap: () => resolvedOnQuickReply('بدي أرخص'),
               ),
               ChatPillChip(
                 label: 'الأقرب لي',
                 icon: Icons.near_me_rounded,
-                onTap: () => resolvedOnQuickReply('أبغى الأقرب'),
+                onTap: () => resolvedOnQuickReply('بدي الأقرب'),
               ),
               ChatPillChip(
                 label: 'ورّني غيرها',
                 icon: Icons.refresh_rounded,
-                onTap: () => resolvedOnQuickReply('ورّني خيارات ثانية'),
+                onTap: () => resolvedOnQuickReply('ورّني خيارات تانية'),
               ),
             ],
           ),

@@ -32,7 +32,7 @@ export class Deal {
   @Prop({ type: Number, default: null })
   value: number | null;
 
-  @Prop({ type: String, default: 'SAR' })
+  @Prop({ type: String, default: 'JOD' })
   currency: string;
 
   @Prop({ type: String, default: null })

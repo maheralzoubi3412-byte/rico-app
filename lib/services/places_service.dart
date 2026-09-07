@@ -58,7 +58,7 @@ class PlacesService {
     }
 
     if (response.statusCode != 200) {
-      throw PlacesException('ما قدرت أوصل لخدمة الأماكن الحين، حاول مرة ثانية.');
+      throw PlacesException('ما قدرت أوصل لخدمة الأماكن هلأ، جرّب مرة تانية.');
     }
 
     final data = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;

@@ -54,7 +54,7 @@ class UnderstandingCard extends StatelessWidget {
       case RankMode.bestRated:
         tags.add((icon: Icons.star_rounded, label: 'الأعلى تقييماً'));
       case RankMode.openNow:
-        tags.add((icon: Icons.schedule_rounded, label: 'مفتوح الحين'));
+        tags.add((icon: Icons.schedule_rounded, label: 'مفتوح الآن'));
       case RankMode.nearest:
         tags.add((icon: Icons.near_me_rounded, label: 'الأقرب لك'));
     }

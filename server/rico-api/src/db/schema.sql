@@ -42,7 +42,7 @@ CREATE TABLE IF NOT EXISTS deals (
   description_ar TEXT,
   deal_type TEXT NOT NULL, -- percent | fixed | bogo | free_item | bundle
   value REAL,
-  currency TEXT NOT NULL DEFAULT 'SAR',
+  currency TEXT NOT NULL DEFAULT 'JOD',
   promo_code TEXT,
   starts_at INTEGER,
   ends_at INTEGER,

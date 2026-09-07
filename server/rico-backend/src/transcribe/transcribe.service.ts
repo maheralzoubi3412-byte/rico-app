@@ -46,7 +46,7 @@ export class TranscribeService {
     const upstreamMime = mime.startsWith('application/') ? 'audio/mp4' : mime;
     form.append('file', new Blob([bytes], { type: upstreamMime }), filename);
     form.append('model', STT_MODEL);
-    // Rico is Saudi-only, and pinning the language stops Whisper from
+    // Tadallal is Arabic-only, and pinning the language stops Whisper from
     // "detecting" a heavily-accented clip as Farsi/Urdu and transliterating
     // it into something the classifier can't parse.
     form.append('language', 'ar');

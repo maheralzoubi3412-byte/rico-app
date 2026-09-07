@@ -39,7 +39,7 @@ function normalizeSelfServeDeal(input) {
       descriptionAr,
       dealType,
       value,
-      currency: 'SAR',
+      currency: 'JOD',
       promoCode: promoCode || null,
       startsAt: null,
       endsAt: null,
