@@ -1,5 +1,6 @@
 import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
-import { COMPOSE_SYSTEM_PROMPT } from './constants/compose.constants';
+import { brandName } from '../common/constants/brands';
+import { buildComposePrompt } from './constants/compose.constants';
 import { ComposeRequestDto } from './dto/compose-request.dto';
 
 @Injectable()
@@ -31,7 +32,7 @@ export class ComposeService {
         body: JSON.stringify({
           model: process.env.GROQ_MODEL || 'openai/gpt-oss-120b',
           messages: [
-            { role: 'system', content: COMPOSE_SYSTEM_PROMPT },
+            { role: 'system', content: buildComposePrompt(brandName(dto.brand)) },
             { role: 'user', content: JSON.stringify(userPayload) },
           ],
           response_format: { type: 'json_object' },

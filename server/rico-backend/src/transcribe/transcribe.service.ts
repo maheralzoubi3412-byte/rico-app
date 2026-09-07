@@ -1,5 +1,6 @@
 import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
-import { isLikelySilence, STT_MODEL, STT_VOCAB_HINT } from './constants/transcribe.constants';
+import { brandName } from '../common/constants/brands';
+import { buildVocabHint, isLikelySilence, STT_MODEL } from './constants/transcribe.constants';
 
 // What a phone can realistically send. The client records aac-lc in m4a,
 // but the Content-Type on a multipart upload is whatever the HTTP client
@@ -19,7 +20,7 @@ const ALLOWED_MIME_PREFIXES = ['audio/', 'video/mp4', 'video/3gpp', 'application
 
 @Injectable()
 export class TranscribeService {
-  async transcribe(audio?: Express.Multer.File) {
+  async transcribe(audio?: Express.Multer.File, brand?: string) {
     const apiKey = process.env.GROQ_API_KEY;
     if (!apiKey) {
       throw new HttpException({ error: 'server_misconfigured' }, HttpStatus.INTERNAL_SERVER_ERROR);
@@ -51,7 +52,7 @@ export class TranscribeService {
     // it into something the classifier can't parse.
     form.append('language', 'ar');
     form.append('response_format', 'json');
-    form.append('prompt', STT_VOCAB_HINT);
+    form.append('prompt', buildVocabHint(brandName(brand)));
     // Deterministic: this is a transcription, not a generation — there is
     // nothing to gain from sampling variety in a search query.
     form.append('temperature', '0');

@@ -49,4 +49,14 @@ export class ClassifyRequestDto {
   @ValidateNested()
   @Type(() => LastResultsDto)
   lastResults?: LastResultsDto;
+
+  // Which regional build is asking. Deliberately not validated against the
+  // known slugs: the brand only picks a display name, so a client sending
+  // one this deployment hasn't heard of should still get a working answer
+  // (as the default brand) rather than a 400 that drops it into offline
+  // keyword parsing. brandName() does the resolving and the falling back.
+  @IsOptional()
+  @IsString()
+  @Length(1, 40)
+  brand?: string;
 }

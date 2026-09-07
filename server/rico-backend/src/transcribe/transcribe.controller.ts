@@ -1,4 +1,4 @@
-import { Controller, HttpCode, HttpStatus, Post, UploadedFile, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, HttpCode, HttpStatus, Post, UploadedFile, UseInterceptors } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { MAX_AUDIO_BYTES } from './constants/transcribe.constants';
 import { TranscribeService } from './transcribe.service';
@@ -15,7 +15,11 @@ export class TranscribeController {
   @Post('transcribe')
   @HttpCode(HttpStatus.OK)
   @UseInterceptors(FileInterceptor('audio', { limits: { fileSize: MAX_AUDIO_BYTES, files: 1 } }))
-  transcribe(@UploadedFile() audio?: Express.Multer.File) {
-    return this.transcribeService.transcribe(audio);
+  // `brand` rides along as an ordinary multipart text field. There's no DTO
+  // here because the global ValidationPipe doesn't apply to multipart bodies,
+  // so it's read straight off the body and resolved (with a fallback) by
+  // brandName() rather than trusted.
+  transcribe(@UploadedFile() audio?: Express.Multer.File, @Body('brand') brand?: string) {
+    return this.transcribeService.transcribe(audio, typeof brand === 'string' ? brand : undefined);
   }
 }

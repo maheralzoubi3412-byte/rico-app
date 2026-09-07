@@ -1,5 +1,6 @@
 import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
-import { CATEGORIES, MAX_INTENTS, OTHER_TAG_KEYS, RANKS, SYSTEM_PROMPT } from './constants/classify.constants';
+import { brandName } from '../common/constants/brands';
+import { buildSystemPrompt, CATEGORIES, MAX_INTENTS, OTHER_TAG_KEYS, RANKS } from './constants/classify.constants';
 import { ClassifyRequestDto, LastResultsDto } from './dto/classify-request.dto';
 
 interface Intent {
@@ -102,7 +103,8 @@ export class ClassifyService {
     // Llama-family chat templates are trained on (system is reserved for
     // position 0), so "last shown results" context is appended to the one
     // system turn instead of injected as its own message.
-    const systemContent = dto.lastResults ? `${SYSTEM_PROMPT}${buildLastResultsBlock(dto.lastResults)}` : SYSTEM_PROMPT;
+    const prompt = buildSystemPrompt(brandName(dto.brand));
+    const systemContent = dto.lastResults ? `${prompt}${buildLastResultsBlock(dto.lastResults)}` : prompt;
 
     let groqResponse: Response;
     try {

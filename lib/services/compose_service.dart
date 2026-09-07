@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '../brand.dart';
 
 /// يولّد رد ريكو الطبيعي (لهجة سعودية — تُفرضها تعليمات الخادم لا العميل)
 /// بالاعتماد على نتائج بحث فعلية تم
@@ -28,6 +29,7 @@ class ComposeService {
             headers: {'Content-Type': 'application/json'},
             body: jsonEncode({
               'message': message,
+              'brand': Brand.slug,
               'intentKind': intentKind,
               'intentLabel': intentLabel,
               'rank': rank,

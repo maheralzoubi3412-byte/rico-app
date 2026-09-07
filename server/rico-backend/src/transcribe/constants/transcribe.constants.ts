@@ -8,8 +8,8 @@ export const STT_MODEL = process.env.GROQ_STT_MODEL || 'whisper-large-v3-turbo';
 // Saudi dialect, so seeding the category words and the brand names users
 // actually say turns a lot of near-misses ("أقرب سيدلية") into exact
 // category matches the classifier can resolve.
-export const STT_VOCAB_HINT =
-  'ريكو، أقرب مطعم، كافيه، قهوة، صيدلية، بقالة، سوبرماركت، محطة بنزين، فندق، ' +
+export const buildVocabHint = (brand: string) =>
+  `${brand}، أقرب مطعم، كافيه، قهوة، صيدلية، بقالة، سوبرماركت، محطة بنزين، فندق، ` +
   'صراف آلي، بنك، مستشفى، عيادة، نادي رياضي، مول، حلاق، مغسلة، ورشة سيارات، ' +
   'عروض، خصومات، أرخص، أقرب، مفتوح الحين، أفضل تقييم، ' +
   'ستاربكس، دانكن، البيك، كودو، هرفي، بنده، الدانوب، النهدي، الدواء';
