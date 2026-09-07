@@ -51,18 +51,21 @@ flutter_launcher_icons:
   android: true
   ios: true
   image_path: "assets/icon/icon.png"
-  adaptive_icon_background: "#006C35"
+  adaptive_icon_background: "#FFFFFF"
   adaptive_icon_foreground: "assets/icon/foreground.png"
   remove_alpha_ios: true
   min_sdk_android: 21
 
-# شعار foreground.png أبيض، فخلفية الإطلاق تبقى بالأخضر السعودي لا بالعاجي
-# (كان الشعار ليصير غير مرئي عليه). الانتقال أخضر ← تطبيق فاتح مقصود.
+# شعار تدلل أخضر زمردي بفراغ داخلي أبيض — عكس شعار ريكو الأبيض الذي كان
+# يفرض خلفية إطلاق خضراء ليبان عليها. فخلفية الإطلاق صارت بلون أرضية
+# التطبيق نفسها (RicoColors.canvas) عشان الانتقال من شاشة الإطلاق للمحادثة
+# ما يبيّن كقطع لوني، وخلفية الأيقونة التكيّفية بيضاء عشان الفراغ الداخلي
+# للشعار يُقرأ كجزء من التصميم لا كثقب.
 flutter_native_splash:
-  color: "#006C35"
+  color: "#FAF8F5"
   image: assets/icon/foreground.png
   android_12:
-    color: "#006C35"
+    color: "#FAF8F5"
     image: assets/icon/foreground.png
   android: true
   ios: true
