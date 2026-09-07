@@ -1,4 +1,4 @@
-package com.example.rico_app
+package com.example.tadallal
 
 import io.flutter.embedding.android.FlutterActivity
 
