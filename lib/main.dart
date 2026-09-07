@@ -13,7 +13,7 @@ class RicoApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'ريكو',
+      title: 'تدلل',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(),
       // العربية هي لغة التطبيق الوحيدة: تثبيتها هنا مع مُفوّضات الترجمة يجعل

@@ -6,6 +6,6 @@ void main() {
   testWidgets('RicoApp shows the chat screen greeting', (WidgetTester tester) async {
     await tester.pumpWidget(const RicoApp());
 
-    expect(find.textContaining('ريكو'), findsWidgets);
+    expect(find.textContaining('تدلل'), findsWidgets);
   });
 }

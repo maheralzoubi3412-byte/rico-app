@@ -26,7 +26,7 @@ class WelcomeHero extends StatelessWidget {
         children: [
           const RicoAvatar(size: 68),
           const SizedBox(height: 18),
-          Text('ريكو', style: RicoText.display.copyWith(fontSize: 27)),
+          Text('تدلل', style: RicoText.display.copyWith(fontSize: 27)),
           const SizedBox(height: 6),
           Text(
             'مساعدك الذكي يدلّك على أقرب مكان\nوأفضل عرض حسب موقعك',

@@ -74,7 +74,7 @@ void main() {
       expect(route('شكرا بس أبي أرخص كافيه'), 'search');
     });
 
-    test('كل رد ينتهي بدعوة لاستخدام ريكو', () {
+    test('كل رد ينتهي بدعوة لاستخدام تدلل', () {
       for (final ask in ['هلا', 'بياناتي', 'كم الساعة', 'فيه توصيل؟', 'مع السلامة']) {
         final reply = IntentService.detectOffTopicReply(ask)!;
         final lastLine = reply.trim().split('\n').last;

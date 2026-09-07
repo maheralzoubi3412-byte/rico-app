@@ -40,7 +40,7 @@ class ChatHeader extends StatelessWidget implements PreferredSizeWidget {
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('ريكو', style: RicoText.title.copyWith(fontSize: 16.5)),
+                    Text('تدلل', style: RicoText.title.copyWith(fontSize: 16.5)),
                     const SizedBox(height: 2),
                     Row(
                       children: [

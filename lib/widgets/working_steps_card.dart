@@ -58,7 +58,7 @@ class _WorkingStepsCardState extends State<WorkingStepsCard> {
         children: [
           const Row(
             children: [
-              Text('ريكو يشتغل الحين', style: RicoText.labelStrong),
+              Text('تدلل يشتغل الحين', style: RicoText.labelStrong),
               SizedBox(width: 8),
               TypingDots(dotSize: 5),
             ],

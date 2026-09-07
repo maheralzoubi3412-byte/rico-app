@@ -393,7 +393,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
     setState(() {
       _messages.add(ChatMessage(text: text, sender: MessageSender.user));
-      _messages.add(ChatMessage(text: 'ريكو يدوّر لك الحين…', sender: MessageSender.bot, isLoading: true));
+      _messages.add(ChatMessage(text: 'تدلل يدوّر لك الحين…', sender: MessageSender.bot, isLoading: true));
       _sending = true;
     });
     _controller.clear();
@@ -411,7 +411,7 @@ class _ChatScreenState extends State<ChatScreen> {
           _messages.removeLast(); // إزالة رسالة "يبحث..."
           _messages.add(ChatMessage(
             text: classification.reply ??
-                'أنا ريكو، أساعدك تلقى أقرب مطعم أو كافيه أو صيدلية وغيرها 😊 جرّب تسألني مثل «أقرب مطعم».',
+                'أنا تدلل، أساعدك تلقى أقرب مطعم أو كافيه أو صيدلية وغيرها 😊 جرّب تسألني مثل «أقرب مطعم».',
             sender: MessageSender.bot,
           ));
         });

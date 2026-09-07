@@ -66,7 +66,7 @@ class RecommendedPickCard extends StatelessWidget {
             ),
             child: Row(
               children: [
-                const RicoBadge(label: 'ترشيح ريكو', icon: Icons.verified_rounded),
+                const RicoBadge(label: 'ترشيح تدلل', icon: Icons.verified_rounded),
                 const Spacer(),
                 Text('الخيار الأول', style: RicoText.caption.copyWith(color: RicoColors.primaryDeep)),
               ],
