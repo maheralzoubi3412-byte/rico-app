@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
+import '../brand.dart';
 
 /// نتيجة تحويل مقطع صوتي إلى نص.
 ///
@@ -39,6 +40,7 @@ class TranscribeService {
       if (!await file.exists()) return const TranscriptionResult(TranscriptionStatus.failed);
 
       final request = http.MultipartRequest('POST', Uri.parse(_url))
+        ..fields['brand'] = Brand.slug
         ..files.add(await http.MultipartFile.fromPath(
           'audio',
           filePath,

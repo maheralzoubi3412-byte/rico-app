@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'intent_service.dart';
+import '../brand.dart';
 
 /// نية واحدة مفكوكة من رد المصنّف (LLM)، قد تمثّل بحثاً عن مكان أو طلب عروض.
 /// رسالة واحدة قد تحتوي عدة نوايا (انظر [LlmClassification.intents]).
@@ -110,6 +111,7 @@ class LlmIntentService {
   }) async {
     final body = jsonEncode({
       'message': message,
+      'brand': Brand.slug,
       if (history != null && history.isNotEmpty) 'history': history,
       if (lastResults != null) 'lastResults': lastResults,
     });

@@ -1,8 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '../brand.dart';
 
-/// يولّد رد ريكو الطبيعي (لهجة سعودية — تُفرضها تعليمات الخادم لا العميل)
+/// يولّد رد تدلل الطبيعي (لهجة أردنية — تُفرضها تعليمات الخادم لا العميل)
 /// بالاعتماد على نتائج بحث فعلية تم
 /// جلبها مسبقاً (أماكن أو عروض) — عبر خادم rico-backend (NestJS + Groq).
 /// لا يُلقي أي استثناء أبداً؛ عند أي عطل (شبكة/مهلة/رد غير متوقع) يرجع null
@@ -28,6 +29,7 @@ class ComposeService {
             headers: {'Content-Type': 'application/json'},
             body: jsonEncode({
               'message': message,
+              'brand': Brand.slug,
               'intentKind': intentKind,
               'intentLabel': intentLabel,
               'rank': rank,
