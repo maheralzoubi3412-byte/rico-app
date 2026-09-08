@@ -1,5 +1,5 @@
 import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
-import { brandName } from '../common/constants/brands';
+import { brandFor } from '../common/constants/brands';
 import { buildVocabHint, isLikelySilence, STT_MODEL } from './constants/transcribe.constants';
 
 // What a phone can realistically send. The client records aac-lc in m4a,
@@ -52,7 +52,7 @@ export class TranscribeService {
     // it into something the classifier can't parse.
     form.append('language', 'ar');
     form.append('response_format', 'json');
-    form.append('prompt', buildVocabHint(brandName(brand)));
+    form.append('prompt', buildVocabHint(brandFor(brand)));
     // Deterministic: this is a transcription, not a generation — there is
     // nothing to gain from sampling variety in a search query.
     form.append('temperature', '0');

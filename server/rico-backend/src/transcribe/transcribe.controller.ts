@@ -18,7 +18,7 @@ export class TranscribeController {
   // `brand` rides along as an ordinary multipart text field. There's no DTO
   // here because the global ValidationPipe doesn't apply to multipart bodies,
   // so it's read straight off the body and resolved (with a fallback) by
-  // brandName() rather than trusted.
+  // brandFor() rather than trusted.
   transcribe(@UploadedFile() audio?: Express.Multer.File, @Body('brand') brand?: string) {
     return this.transcribeService.transcribe(audio, typeof brand === 'string' ? brand : undefined);
   }

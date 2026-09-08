@@ -51,10 +51,11 @@ export class ClassifyRequestDto {
   lastResults?: LastResultsDto;
 
   // Which regional build is asking. Deliberately not validated against the
-  // known slugs: the brand only picks a display name, so a client sending
-  // one this deployment hasn't heard of should still get a working answer
-  // (as the default brand) rather than a 400 that drops it into offline
-  // keyword parsing. brandName() does the resolving and the falling back.
+  // known slugs: the brand only picks a display name and a dialect, so a
+  // client sending one this deployment hasn't heard of should still get a
+  // working answer (as the default brand, in Saudi) rather than a 400 that
+  // drops it into offline
+  // keyword parsing. brandFor() does the resolving and the falling back.
   @IsOptional()
   @IsString()
   @Length(1, 40)
