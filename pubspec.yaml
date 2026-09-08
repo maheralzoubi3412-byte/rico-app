@@ -34,6 +34,7 @@ flutter:
   assets:
     - assets/icon/icon.png
     - assets/icon/foreground.png
+    - assets/icon/splash.png
 
   fonts:
     - family: PlexArabic
@@ -63,10 +64,14 @@ flutter_launcher_icons:
 # للشعار يُقرأ كجزء من التصميم لا كثقب.
 flutter_native_splash:
   color: "#FAF8F5"
-  image: assets/icon/foreground.png
+  # صورة الإطلاق لها هامش أمان داخلي، بخلاف foreground.png المخصصة للأيقونة
+  # التكيّفية: أندرويد ١٢ يقصّ صورة الإطلاق بقناع دائري، وflutter_launcher_icons
+  # يضيف هامش ١٦٪ للأيقونة بنفسه — فلو استخدمنا ملفاً واحداً لصار أحدهما مقصوصاً
+  # أو مصغّراً مرتين.
+  image: assets/icon/splash.png
   android_12:
     color: "#FAF8F5"
-    image: assets/icon/foreground.png
+    image: assets/icon/splash.png
   android: true
   ios: true
   web: false

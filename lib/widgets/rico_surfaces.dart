@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
-import 'rico_logo_mark.dart';
 
 /// البطاقة الأساسية في كل الشاشات — سطح أبيض على أرضية عاجية، حافة شعرية
 /// وظل مزدوج ناعم. كل بطاقة في التطبيق تُبنى فوقها بدل تكرار [BoxDecoration].
@@ -175,8 +174,13 @@ class RicoSectionLabel extends StatelessWidget {
   }
 }
 
-/// شعار ريكو داخل مربّع مستدير بتدرّج أخضر — العنصر الهوياتي المتكرر (شريط
-/// العنوان، شاشة الترحيب، صورة المتحدث). النقطة الذهبية جزء من الشعار نفسه.
+/// شعار تدلل داخل مربّع مستدير بأرضية بيضاء — العنصر الهوياتي المتكرر (شريط
+/// العنوان، شاشة الترحيب، صورة المتحدث).
+///
+/// الأرضية بيضاء لا خضراء: شعار تدلل أخضر زمردي بفراغ داخلي أبيض، فعلى أرضية
+/// خضراء يذوب الشعار في خلفيته ويختفي الفراغ الذي يحمل النقطتين. نفس القرار
+/// المتّخذ لأيقونة التطبيق (adaptive_icon_background أبيض)، عشان الأيقونة على
+/// شاشة الجهاز والصورة داخل المحادثة تُقرأ كعلامة واحدة.
 class RicoAvatar extends StatelessWidget {
   final double size;
 
@@ -184,24 +188,27 @@ class RicoAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // الأصل ١٠٢٤ بكسل ويُرسم هنا بأربعين، فبدون cacheWidth يُفكَّك بحجمه
+    // الكامل في الذاكرة لكل صورة متحدث في المحادثة.
+    final pixels = (size * MediaQuery.devicePixelRatioOf(context)).round();
     return Container(
       width: size,
       height: size,
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topRight,
-          end: Alignment.bottomLeft,
-          colors: [RicoColors.primaryLift, RicoColors.primaryDeep],
-        ),
+        color: RicoColors.surface,
         borderRadius: BorderRadius.circular(size * 0.32),
+        border: Border.all(color: RicoColors.hairline),
         boxShadow: RicoShadows.brand,
       ),
-      child: RicoLogoMark(
-        height: size * 0.5,
-        color: Colors.white,
-        dotColor: const Color(0xFFE8C765),
-        strokeWidth: 30,
+      child: Padding(
+        padding: EdgeInsets.all(size * 0.1),
+        child: Image.asset(
+          'assets/icon/foreground.png',
+          fit: BoxFit.contain,
+          cacheWidth: pixels,
+          cacheHeight: pixels,
+        ),
       ),
     );
   }
