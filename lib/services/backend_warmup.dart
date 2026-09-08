@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:http/http.dart' as http;
+import '../brand.dart';
 
 /// يوقظ خادم rico-backend مبكراً.
 ///
@@ -10,8 +11,8 @@ import 'package:http/http.dart' as http;
 /// LLM) أول ما تفتح الشاشة وأول ما يبدأ المستخدم يكتب، فيكون الخادم صاحياً
 /// وقت الطلب الحقيقي.
 class BackendWarmup {
-  // نفس مضيف بقية الخدمات. للتجربة المحلية بدّلها لـ http://localhost:3000/
-  static const String _url = 'https://app.rico-go.com/';
+  // مضيف واحد لكل الخدمات، يُبدّل من Brand.backendOrigin.
+  static const String _url = '${Brand.backendOrigin}/';
 
   /// أقل فاصل بين نداءين — الكتابة تطلق النداء مع كل ضغطة زر، وما لها داعي
   /// أكثر من مرة كل فترة. أقصر من مهلة سكون الخادم عشان يبقى صاحياً أثناء

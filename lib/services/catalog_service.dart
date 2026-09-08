@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../models/business_catalog.dart';
+import '../brand.dart';
 
 class CatalogException implements Exception {
   final String message;
@@ -12,9 +13,8 @@ class CatalogException implements Exception {
 /// يجلب منتجات وعروض نشاط تجاري واحد من rico-backend (GET /places/:id/catalog)
 /// — لعرضها داخل الدردشة عند اختيار نتيجة بحث حقيقية (source == 'rico').
 class CatalogService {
-  // للتجربة المحلية بدّلها لـ http://localhost:3000 (iOS Simulator/سطح
-  // المكتب) أو http://10.0.2.2:3000 (Android Emulator).
-  static const String _baseUrl = 'https://app.rico-go.com';
+  // مضيف واحد لكل الخدمات، يُبدّل من Brand.backendOrigin.
+  static const String _baseUrl = Brand.backendOrigin;
 
   Future<BusinessCatalog> fetchCatalog(String businessId) async {
     http.Response response;

@@ -9,9 +9,8 @@ import '../brand.dart';
 /// لا يُلقي أي استثناء أبداً؛ عند أي عطل (شبكة/مهلة/رد غير متوقع) يرجع null
 /// ليستخدم المستدعي الرد الجاهز (القالب الثابت) كخطة بديلة.
 class ComposeService {
-  // للتجربة المحلية بدّلها لـ http://localhost:3000/compose (iOS
-  // Simulator/سطح المكتب) أو http://10.0.2.2:3000/compose (Android Emulator).
-  static const String _url = 'https://app.rico-go.com/compose';
+  // مضيف واحد لكل الخدمات، يُبدّل من Brand.backendOrigin.
+  static const String _url = '${Brand.backendOrigin}/compose';
 
   static Future<String?> composeReply({
     required String message,
