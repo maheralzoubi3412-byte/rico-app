@@ -110,8 +110,8 @@ class _CatalogFlowCardState extends State<CatalogFlowCard> {
             _ItemRow(
               title: product.name,
               subtitle: product.hasDiscount
-                  ? '${product.finalPrice.toStringAsFixed(0)} ر.س  ·  كان ${product.price.toStringAsFixed(0)}'
-                  : '${product.finalPrice.toStringAsFixed(0)} ر.س',
+                  ? '${product.priceLabel}  ·  كان ${product.originalPriceLabel}'
+                  : product.priceLabel,
               icon: Icons.shopping_bag_outlined,
               tone: RicoColors.primaryDeep,
               toneBackground: RicoColors.primaryTint,
@@ -119,7 +119,7 @@ class _CatalogFlowCardState extends State<CatalogFlowCard> {
                 'product',
                 product.id,
                 product.name,
-                '${product.finalPrice.toStringAsFixed(0)} ر.س',
+                product.priceLabel,
               ),
             ),
         ],

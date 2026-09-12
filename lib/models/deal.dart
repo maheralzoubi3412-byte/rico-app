@@ -1,3 +1,5 @@
+import 'currency.dart';
+
 /// خصم/عرض على مكان معيّن، كما يُرجعه رأس النهاية GET /deals في rico-api.
 class Deal {
   final String id;
@@ -21,7 +23,7 @@ class Deal {
     this.descriptionAr,
     required this.dealType,
     this.value,
-    this.currency = 'JOD',
+    this.currency = kDefaultCurrency,
     this.promoCode,
     this.distanceMeters,
     required this.source,
@@ -37,7 +39,7 @@ class Deal {
       descriptionAr: json['descriptionAr'] as String?,
       dealType: json['dealType'] as String,
       value: (json['value'] as num?)?.toDouble(),
-      currency: json['currency'] as String? ?? 'JOD',
+      currency: json['currency'] as String? ?? kDefaultCurrency,
       promoCode: json['promoCode'] as String?,
       distanceMeters: (json['distanceMeters'] as num?)?.toDouble(),
       source: json['source'] as String,
@@ -51,7 +53,7 @@ class Deal {
       case 'percent':
         return value != null ? 'خصم ${value!.toStringAsFixed(0)}٪' : 'خصم';
       case 'fixed':
-        return value != null ? 'خصم ${value!.toStringAsFixed(0)} $_currencyLabel' : 'خصم';
+        return value != null ? 'خصم ${value!.toStringAsFixed(0)} ${currencyLabel(currency)}' : 'خصم';
       case 'bogo':
         return 'اشتري واحد واحصل على الثاني مجاناً';
       case 'free_item':
@@ -60,20 +62,6 @@ class Deal {
         return 'عرض باقة';
       default:
         return 'عرض';
-    }
-  }
-
-  /// اسم العملة بالعربي — رمز ISO خام ("JOD") داخل جملة عربية يُقرأ كأنه
-  /// خطأ، والدينار الأردني هو الحالة الافتراضية الوحيدة عملياً. أي عملة
-  /// أخرى ترجع كما هي بدل أن نخترع لها اسماً.
-  String get _currencyLabel {
-    switch (currency) {
-      case 'JOD':
-        return 'دينار';
-      case 'SAR':
-        return 'ريال';
-      default:
-        return currency;
     }
   }
 

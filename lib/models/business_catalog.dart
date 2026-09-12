@@ -1,3 +1,5 @@
+import 'currency.dart';
+
 /// منتج ضمن قائمة نشاط تجاري معيّن، كما يُرجعه GET /places/:id/catalog.
 class CatalogProduct {
   final String id;
@@ -5,6 +7,7 @@ class CatalogProduct {
   final String? category;
   final double price;
   final double finalPrice;
+  final String currency;
 
   CatalogProduct({
     required this.id,
@@ -12,6 +15,7 @@ class CatalogProduct {
     this.category,
     required this.price,
     required this.finalPrice,
+    this.currency = kDefaultCurrency,
   });
 
   factory CatalogProduct.fromJson(Map<String, dynamic> json) {
@@ -21,10 +25,18 @@ class CatalogProduct {
       category: json['category'] as String?,
       price: (json['price'] as num).toDouble(),
       finalPrice: (json['finalPrice'] as num).toDouble(),
+      currency: json['currency'] as String? ?? kDefaultCurrency,
     );
   }
 
   bool get hasDiscount => finalPrice < price;
+
+  /// السعر بعد الخصم مع اسم العملة — الصياغة الوحيدة المستخدمة في الواجهة،
+  /// حتى لا يتكرر رمز العملة مكتوباً بخط اليد في كل مكان يعرض سعراً.
+  String get priceLabel => '${finalPrice.toStringAsFixed(0)} ${currencyLabel(currency)}';
+
+  /// السعر قبل الخصم، بلا عملة — يظهر مباشرة بعد priceLabel في نفس السطر.
+  String get originalPriceLabel => price.toStringAsFixed(0);
 }
 
 /// عرض ضمن قائمة نشاط تجاري معيّن (وليس عروض قريبة عامة كما في GET /deals).
@@ -34,6 +46,7 @@ class CatalogDeal {
   final String? descriptionAr;
   final String dealType; // percent | fixed | bogo | free_item | bundle
   final double? value;
+  final String currency;
   final String? promoCode;
 
   CatalogDeal({
@@ -42,6 +55,7 @@ class CatalogDeal {
     this.descriptionAr,
     required this.dealType,
     this.value,
+    this.currency = kDefaultCurrency,
     this.promoCode,
   });
 
@@ -52,6 +66,7 @@ class CatalogDeal {
       descriptionAr: json['descriptionAr'] as String?,
       dealType: json['dealType'] as String,
       value: (json['value'] as num?)?.toDouble(),
+      currency: json['currency'] as String? ?? kDefaultCurrency,
       promoCode: json['promoCode'] as String?,
     );
   }
@@ -62,7 +77,9 @@ class CatalogDeal {
       case 'percent':
         return value != null ? 'خصم ${value!.toStringAsFixed(0)}٪' : 'خصم';
       case 'fixed':
-        return value != null ? 'خصم ${value!.toStringAsFixed(0)} ر.س' : 'خصم';
+        return value != null
+            ? 'خصم ${value!.toStringAsFixed(0)} ${currencyLabel(currency)}'
+            : 'خصم';
       case 'bogo':
         return 'اشتري واحد واحصل على الثاني مجاناً';
       case 'free_item':
